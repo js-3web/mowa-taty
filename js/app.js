@@ -449,6 +449,83 @@
   function openSheet(id) { document.getElementById(id).classList.add('open'); }
   function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
 
+  /* ---- własne okienka -------------------------------------------------
+   * prompt() i confirm() bywają ignorowane w zainstalowanej aplikacji
+   * (iOS w trybie standalone, część przeglądarek na Androidzie). Skoro od
+   * tego zależy wejście do trybu opiekuna i kasowanie danych, robimy własne. */
+
+  function dialog(opts) {
+    return new Promise(function (resolve) {
+      var host = document.getElementById('dialogInner');
+      host.innerHTML =
+        '<h2>' + escapeHtml(opts.title || '') + '</h2>' +
+        (opts.html || '') +
+        '<div class="big-actions" id="dlgButtons"></div>';
+
+      (opts.buttons || []).forEach(function (b) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.textContent = b.label;
+        if (b.primary) { el.style.borderColor = '#0d47a1'; el.style.background = '#e3f2fd'; }
+        if (b.danger) { el.style.borderColor = '#c62828'; el.style.color = '#c62828'; }
+        el.addEventListener('click', function () {
+          closeSheet('dialog');
+          resolve(typeof b.value === 'function' ? b.value() : b.value);
+        });
+        document.getElementById('dlgButtons').appendChild(el);
+      });
+
+      if (opts.onOpen) { opts.onOpen(host, function (v) { closeSheet('dialog'); resolve(v); }); }
+      openSheet('dialog');
+    });
+  }
+
+  function confirmBox(message, okLabel) {
+    return dialog({
+      title: 'Potwierdź',
+      html: '<div class="msg-preview">' + escapeHtml(message) + '</div>',
+      buttons: [
+        { label: okLabel || 'Tak', value: true, danger: true },
+        { label: 'Anuluj', value: false, primary: true }
+      ]
+    });
+  }
+
+  /** Klawiatura numeryczna — wygodniejsza na telefonie niż pole tekstowe. */
+  function askPin(title) {
+    var entered = '';
+    return dialog({
+      title: title || 'PIN opiekuna',
+      html: '<div class="msg-preview" id="pinView" style="text-align:center;' +
+            'letter-spacing:10px;font-size:30px">·  ·  ·  ·</div>' +
+            '<div class="keypad" id="keypad"></div>',
+      buttons: [{ label: 'Anuluj', value: null }],
+      onOpen: function (host, done) {
+        var pad = host.querySelector('#keypad');
+        var view = host.querySelector('#pinView');
+
+        function draw() {
+          view.textContent = entered
+            ? entered.split('').map(function () { return '●'; }).join('  ')
+            : '·  ·  ·  ·';
+        }
+
+        ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'].forEach(function (k) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = k;
+          b.addEventListener('click', function () {
+            if (k === '⌫') { entered = entered.slice(0, -1); draw(); return; }
+            if (k === 'OK') { done(entered); return; }
+            if (entered.length < 8) { entered += k; draw(); }
+          });
+          pad.appendChild(b);
+        });
+        draw();
+      }
+    });
+  }
+
   var toastTimer = null;
   function toast(msg) {
     el.toast.textContent = msg;
@@ -505,6 +582,7 @@
 
     // Tryb opiekuna: przytrzymanie nagłówka przez 3 s (sekcja c briefu).
     holdToRun(el.boardHead, 3000, function () { Caregiver.requestAccess(); });
+    tapsToRun(el.boardHead, 5, 3000, function () { Caregiver.requestAccess(); });
 
     document.querySelectorAll('[data-close]').forEach(function (b) {
       b.addEventListener('click', function () { closeSheet(b.dataset.close); });
@@ -518,13 +596,55 @@
     renderSentence();
   }
 
+  /* Przytrzymanie palca.
+   *
+   * Świadomie NIE używamy tu Pointer Events ani zdarzeń *cancel. Safari na
+   * iPhonie przy długim przytrzymaniu odpala własny gest (zaznaczanie tekstu,
+   * menu kontekstowe) i wysyła pointercancel — licznik był kasowany i nic się
+   * nie działo. Zamiast tego: touch + mysz, przerwanie tylko przy ruchu palca
+   * i przy puszczeniu. Callout wyłączamy w CSS. */
   function holdToRun(node, ms, fn) {
-    var t = null;
-    function start() { clearTimeout(t); t = setTimeout(fn, ms); }
-    function cancel() { clearTimeout(t); }
-    node.addEventListener('pointerdown', start);
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
-      node.addEventListener(ev, cancel);
+    var timer = null, sx = 0, sy = 0;
+
+    function point(e) {
+      if (e.touches && e.touches.length) { return e.touches[0]; }
+      if (e.changedTouches && e.changedTouches.length) { return e.changedTouches[0]; }
+      return e;
+    }
+
+    function start(e) {
+      var p = point(e);
+      sx = p.clientX; sy = p.clientY;
+      clearTimeout(timer);
+      timer = setTimeout(function () { timer = null; fn(); }, ms);
+    }
+
+    function move(e) {
+      if (!timer) { return; }
+      var p = point(e);
+      if (Math.abs(p.clientX - sx) > 20 || Math.abs(p.clientY - sy) > 20) { stop(); }
+    }
+
+    function stop() { clearTimeout(timer); timer = null; }
+
+    node.addEventListener('touchstart', start, { passive: true });
+    node.addEventListener('touchmove', move, { passive: true });
+    node.addEventListener('touchend', stop);
+    node.addEventListener('mousedown', start);
+    node.addEventListener('mousemove', move);
+    node.addEventListener('mouseup', stop);
+    node.addEventListener('mouseleave', stop);
+  }
+
+  /* Zapasowe wejście dla telefonów, na których przytrzymanie zostanie przejęte
+   * przez system: pięć szybkich dotknięć nagłówka. */
+  function tapsToRun(node, count, windowMs, fn) {
+    var hits = [];
+    node.addEventListener('click', function () {
+      var now = Date.now();
+      hits.push(now);
+      hits = hits.filter(function (t) { return now - t < windowMs; });
+      if (hits.length >= count) { hits = []; fn(); }
     });
   }
 
@@ -539,6 +659,9 @@
     closeSheet: closeSheet,
     imageUrl: imageUrl,
     escapeHtml: escapeHtml,
+    dialog: dialog,
+    confirmBox: confirmBox,
+    askPin: askPin,
     setCaregiver: function (on) {
       S.caregiver = !!on;
       document.body.classList.toggle('caregiver', S.caregiver);

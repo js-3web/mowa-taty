@@ -5,7 +5,7 @@
  *
  * Po zmianie plików PODNIEŚ CACHE_VERSION, inaczej telefon zostanie przy starej wersji.
  */
-var CACHE_VERSION = 'mowa-taty-v1';
+var CACHE_VERSION = 'mowa-taty-v2';
 
 var SHELL = [
   './',

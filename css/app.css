@@ -92,6 +92,11 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   display: flex; align-items: center; gap: 10px;
   padding: 6px 12px;
   background: var(--board-color, #37474f); color: #fff;
+  /* Bez tego iOS przy przytrzymaniu pokazuje własne menu i przerywa gest
+     wejścia w tryb opiekuna. */
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  cursor: pointer;
 }
 #boardTitle { font-size: 18px; font-weight: 700; flex: 1; }
 #modeTag {
@@ -211,6 +216,14 @@ body.caregiver .tile::after {
 .big-actions svg { width: 34px; height: 34px; flex: 0 0 auto; }
 .big-actions .sub { display: block; font-size: 13px; font-weight: 400; color: var(--muted); }
 .big-actions button:disabled { opacity: .4; }
+/* klawiatura PIN */
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.keypad button {
+  min-height: 66px; font-size: 26px; font-weight: 700;
+  border: 3px solid var(--line); border-radius: 12px; background: #f7f9fa;
+}
+.keypad button:active { background: #fff59d; }
+
 .sheet-close {
   margin-top: 14px; width: 100%; min-height: 60px;
   border: 3px solid var(--line); border-radius: 14px;

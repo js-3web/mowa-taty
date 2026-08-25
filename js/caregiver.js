@@ -20,14 +20,17 @@
 
   function requestAccess() {
     ready();
+    if (App.state.caregiver) { openMain(); return; }
+
     var pin = App.state.settings.caregiverPin;
-    if (pin) {
-      var given = global.prompt('PIN opiekuna:');
-      if (given === null) { return; }
+    if (!pin) { App.setCaregiver(true); openMain(); return; }
+
+    App.askPin('PIN opiekuna').then(function (given) {
+      if (given === null || given === undefined) { return; }
       if (String(given).trim() !== String(pin)) { App.toast('Błędny PIN'); return; }
-    }
-    App.setCaregiver(true);
-    openMain();
+      App.setCaregiver(true);
+      openMain();
+    });
   }
 
   function openMain() {
@@ -253,10 +256,13 @@
 
     if (personId) {
       document.getElementById('pDelete').addEventListener('click', function () {
-        if (!global.confirm('Usunąć ' + (p.name || 'tę osobę') + '?')) { return; }
-        DB.remove('people', p.id)
-          .then(function () { return App.reload(); })
-          .then(openMain);
+        App.confirmBox('Usunąć ' + (p.name || 'tę osobę') + ' z tablicy?', 'Usuń')
+          .then(function (ok) {
+            if (!ok) { return; }
+            return DB.remove('people', p.id)
+              .then(function () { return App.reload(); })
+              .then(openMain);
+          });
       });
     }
 
@@ -352,11 +358,14 @@
 
     if (!isNew) {
       document.getElementById('bDelete').addEventListener('click', function () {
-        if (!global.confirm('Usunąć przycisk „' + btn.label + '"?')) { return; }
-        board.buttonIds = (board.buttonIds || []).filter(function (x) { return x !== btn.id; });
-        DB.put('boards', board)
-          .then(function () { return App.reload(); })
-          .then(function () { App.closeSheet('caregiverPanel'); App.toast('Usunięto'); });
+        App.confirmBox('Usunąć przycisk „' + btn.label + '" z tablicy?', 'Usuń')
+          .then(function (ok) {
+            if (!ok) { return; }
+            board.buttonIds = (board.buttonIds || []).filter(function (x) { return x !== btn.id; });
+            return DB.put('boards', board)
+              .then(function () { return App.reload(); })
+              .then(function () { App.closeSheet('caregiverPanel'); App.toast('Usunięto'); });
+          });
       });
     }
 
@@ -414,19 +423,23 @@
     input.addEventListener('change', function () {
       var f = input.files && input.files[0];
       if (!f) { return; }
-      if (!global.confirm('Wczytanie kopii nadpisze obecną zawartość. Kontynuować?')) { return; }
-      var fr = new FileReader();
-      fr.onload = function () {
-        var data;
-        try { data = JSON.parse(fr.result); }
-        catch (e) { App.toast('To nie jest poprawny plik kopii'); return; }
-        App.toast('Wczytuję…');
-        DB.importAll(data)
-          .then(normalizeStoredImages)
-          .then(function () { return App.reload(); })
-          .then(function () { App.toast('Wczytano kopię'); openMain(); });
-      };
-      fr.readAsText(f);
+
+      App.confirmBox('Wczytanie kopii nadpisze obecną zawartość aplikacji. Kontynuować?',
+                     'Wczytaj').then(function (ok) {
+        if (!ok) { return; }
+        var fr = new FileReader();
+        fr.onload = function () {
+          var data;
+          try { data = JSON.parse(fr.result); }
+          catch (e) { App.toast('To nie jest poprawny plik kopii'); return; }
+          App.toast('Wczytuję…');
+          DB.importAll(data)
+            .then(normalizeStoredImages)
+            .then(function () { return App.reload(); })
+            .then(function () { App.toast('Wczytano kopię'); openMain(); });
+        };
+        fr.readAsText(f);
+      });
     });
     input.click();
   }
@@ -456,18 +469,19 @@
   }
 
   function factoryReset() {
-    if (!global.confirm('Przywrócić domyślne tablice? Zdjęcia i bliscy zostaną zachowani.')) {
-      return;
-    }
-    Promise.all([DB.clear('boards'), DB.clear('buttons')])
-      .then(function () {
-        return Promise.all([
-          DB.putMany('boards', DefaultData.boards),
-          DB.putMany('buttons', DefaultData.buttons)
-        ]);
-      })
-      .then(function () { return App.reload(); })
-      .then(function () { App.toast('Przywrócono'); openMain(); });
+    App.confirmBox('Przywrócić domyślne tablice? Zdjęcia i bliscy zostaną zachowani.',
+                   'Przywróć').then(function (ok) {
+      if (!ok) { return; }
+      return Promise.all([DB.clear('boards'), DB.clear('buttons')])
+        .then(function () {
+          return Promise.all([
+            DB.putMany('boards', DefaultData.boards),
+            DB.putMany('buttons', DefaultData.buttons)
+          ]);
+        })
+        .then(function () { return App.reload(); })
+        .then(function () { App.toast('Przywrócono'); openMain(); });
+    });
   }
 
   /** Czy telefon obiecał nie kasować danych i ile miejsca zajmują zdjęcia. */

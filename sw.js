@@ -1,15 +1,21 @@
-/* sw.js — service worker: aplikacja ma działać bez internetu.
+/* sw.js — service worker: aplikacja ma działać bez internetu, ale też
+ * natychmiast podchwytywać nową wersję.
  *
- * Strategia: cache-first dla powłoki aplikacji. Nic nie jest wysyłane na zewnątrz,
- * nie ma żadnych zapytań do obcych serwerów — jest co cache'ować i to wszystko.
+ * Poprzednia wersja trzymała wszystko „cache-first" i to był błąd: telefon
+ * uparcie pokazywał starą aplikację, a kod odpowiedzialny za aktualizację
+ * siedział w starym index.html, więc nigdy się nie uruchamiał.
  *
- * Po zmianie plików PODNIEŚ CACHE_VERSION, inaczej telefon zostanie przy starej wersji.
+ * Teraz: powłoka aplikacji (HTML/CSS/JS) idzie **network-first** — przy
+ * internecie zawsze świeża, bez internetu z pamięci. Obrazki i ikony zostają
+ * cache-first, bo się nie zmieniają. Pliki są małe (~150 kB), więc nic to
+ * nie kosztuje, a wersja zawsze się zgadza.
  */
-var CACHE_VERSION = 'mowa-taty-v5';
+var CACHE_VERSION = 'mowa-taty-v6';
 
 var SHELL = [
   './',
   './index.html',
+  './diag.html',
   './css/app.css',
   './js/icons.js',
   './js/db.js',
@@ -20,6 +26,7 @@ var SHELL = [
   './js/app.js',
   './js/caregiver.js',
   './manifest.json',
+  './version.json',
   './img/icon-192.png',
   './img/icon-512.png'
 ];
@@ -42,28 +49,57 @@ self.addEventListener('activate', function (e) {
   );
 });
 
+/** Czy to plik powłoki aplikacji — ten, który musi być zawsze aktualny. */
+function isShell(url) {
+  return /\.(html|js|css|json)$/i.test(url.pathname) || url.pathname.endsWith('/');
+}
+
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') { return; }
 
-  // Paczka konfiguracyjna musi być zawsze świeża — nigdy z pamięci podręcznej,
-  // inaczej zdalna aktualizacja nigdy by nie dotarła.
-  if (/paczka\.(json|enc)/.test(e.request.url)) { return; }
+  var url = new URL(e.request.url);
 
-  e.respondWith(
-    caches.match(e.request).then(function (hit) {
-      if (hit) { return hit; }
-      return fetch(e.request).then(function (res) {
-        // Dokładaj do cache tylko własne pliki.
-        if (res && res.status === 200 && res.type === 'basic') {
-          var copy = res.clone();
-          caches.open(CACHE_VERSION).then(function (c) { c.put(e.request, copy); });
-        }
-        return res;
-      }).catch(function () {
-        // Offline i brak w cache — dla nawigacji pokaż powłokę.
-        if (e.request.mode === 'navigate') { return caches.match('./index.html'); }
-        return new Response('', { status: 504, statusText: 'offline' });
-      });
-    })
-  );
+  // Paczka konfiguracyjna: nigdy przez service workera, zawsze prosto z sieci.
+  if (/paczka\.(json|enc)/.test(url.pathname)) { return; }
+
+  // Obcy origin — nie mieszamy się.
+  if (url.origin !== self.location.origin) { return; }
+
+  if (isShell(url) || e.request.mode === 'navigate') {
+    e.respondWith(networkFirst(e.request));
+    return;
+  }
+
+  e.respondWith(cacheFirst(e.request));
 });
+
+function networkFirst(request) {
+  return fetch(request).then(function (res) {
+    if (res && res.status === 200 && res.type === 'basic') {
+      var copy = res.clone();
+      caches.open(CACHE_VERSION).then(function (c) { c.put(request, copy); });
+    }
+    return res;
+  }).catch(function () {
+    return caches.match(request).then(function (hit) {
+      if (hit) { return hit; }
+      if (request.mode === 'navigate') { return caches.match('./index.html'); }
+      return new Response('', { status: 504, statusText: 'offline' });
+    });
+  });
+}
+
+function cacheFirst(request) {
+  return caches.match(request).then(function (hit) {
+    if (hit) { return hit; }
+    return fetch(request).then(function (res) {
+      if (res && res.status === 200 && res.type === 'basic') {
+        var copy = res.clone();
+        caches.open(CACHE_VERSION).then(function (c) { c.put(request, copy); });
+      }
+      return res;
+    }).catch(function () {
+      return new Response('', { status: 504, statusText: 'offline' });
+    });
+  });
+}

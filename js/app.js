@@ -2,6 +2,11 @@
 (function (global) {
   'use strict';
 
+  /* Wersja wbudowana w ten plik. Porównywana z version.json na serwerze —
+   * to pas bezpieczeństwa na wypadek, gdyby service worker się zaciął.
+   * Zmienia się skryptem: node app/scripts/bump-version.js */
+  var APP_VERSION = 'v6';
+
   var S = {
     settings: null,
     boards: {},          // id -> board
@@ -41,6 +46,7 @@
         el.boot.classList.add('done');
         el.app.hidden = false;
         openPanelFromUrl();
+        checkAppVersion();
         checkRemote();
         scheduleRemoteChecks();
       })
@@ -68,11 +74,57 @@
   var remoteBusy = false;
 
   function scheduleRemoteChecks() {
-    if (S.settings.remoteAuto === false || !S.settings.remoteUrl) { return; }
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { checkRemote(); }
+      if (document.hidden) { return; }
+      checkAppVersion();
+      checkRemote();
     });
-    setInterval(checkRemote, 30 * 60 * 1000);
+    setInterval(function () { checkAppVersion(); checkRemote(); }, 30 * 60 * 1000);
+  }
+
+  /* Pas bezpieczeństwa aktualizacji kodu.
+   * Gdyby service worker zaciął się na starej wersji (a właśnie tak się stało),
+   * ten mechanizm i tak wykryje różnicę: pobiera version.json prosto z sieci,
+   * porównuje z wersją wbudowaną w ten plik i — jeśli się różni — czyści
+   * pamięć podręczną i przeładowuje. Tylko wtedy, gdy nie przerwiemy
+   * budowanego zdania ani wypowiedzi. */
+  function checkAppVersion() {
+    if (!navigator.onLine) { return; }
+
+    fetch('version.json?d=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || !v.version || v.version === APP_VERSION) { return; }
+        S.pendingVersion = v.version;
+        applyAppUpdateWhenIdle();
+      })
+      .catch(function () { /* brak sieci — trudno, spróbujemy później */ });
+  }
+
+  function applyAppUpdateWhenIdle() {
+    if (S.updating) { return; }
+    S.updating = true;
+
+    (function wait() {
+      var busy = S.sentence.length || (TTS.state && TTS.state.speaking) ||
+                 document.querySelector('.sheet.open');
+      if (busy) { setTimeout(wait, 5000); return; }
+
+      var jobs = [];
+      if (global.caches) {
+        jobs.push(caches.keys().then(function (k) {
+          return Promise.all(k.map(function (n) { return caches.delete(n); }));
+        }));
+      }
+      if (navigator.serviceWorker) {
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+          return Promise.all(rs.map(function (r) { return r.unregister(); }));
+        }));
+      }
+      Promise.all(jobs).then(function () {
+        location.replace(location.pathname + '?v=' + Date.now());
+      });
+    }());
   }
 
   function checkRemote() {
@@ -751,6 +803,8 @@
     dialog: dialog,
     confirmBox: confirmBox,
     askPin: askPin,
+    version: APP_VERSION,
+    checkAppVersion: checkAppVersion,
     setCaregiver: function (on) {
       S.caregiver = !!on;
       document.body.classList.toggle('caregiver', S.caregiver);

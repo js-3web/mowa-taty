@@ -5,7 +5,7 @@
  *
  * Po zmianie plików PODNIEŚ CACHE_VERSION, inaczej telefon zostanie przy starej wersji.
  */
-var CACHE_VERSION = 'mowa-taty-v2';
+var CACHE_VERSION = 'mowa-taty-v4';
 
 var SHELL = [
   './',
@@ -16,6 +16,7 @@ var SHELL = [
   './js/data.js',
   './js/tts.js',
   './js/share.js',
+  './js/remote.js',
   './js/app.js',
   './js/caregiver.js',
   './manifest.json',
@@ -43,6 +44,10 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') { return; }
+
+  // Paczka konfiguracyjna musi być zawsze świeża — nigdy z pamięci podręcznej,
+  // inaczej zdalna aktualizacja nigdy by nie dotarła.
+  if (/paczka\.(json|enc)/.test(e.request.url)) { return; }
 
   e.respondWith(
     caches.match(e.request).then(function (hit) {

@@ -75,13 +75,13 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
 #barActions { display: flex; gap: 6px; }
 #barActions button {
-  min-width: 62px; min-height: 62px;
+  min-width: 66px; min-height: 68px;
   border: 2px solid var(--line); border-radius: 12px;
-  background: #f7f9fa; font-size: 12px; font-weight: 700;
+  background: #f7f9fa; font-size: 11px; font-weight: 700;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; padding: 4px;
+  gap: 1px; padding: 3px;
 }
-#barActions button svg { width: 26px; height: 26px; }
+#barActions button svg { width: 38px; height: 38px; flex: 0 0 auto; }
 #barActions button:disabled { opacity: .35; }
 #btnSpeakAll { background: #e3f2fd; border-color: #90caf9; }
 #btnSend { background: #e8f5e9; border-color: #a5d6a7; }
@@ -176,10 +176,11 @@ body.caregiver .tile::after {
   font-size: 22px; font-weight: 800;
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
-#nav button svg { width: 30px; height: 30px; }
+#nav button svg { width: 40px; height: 40px; flex: 0 0 auto; }
 #btnYes { border-color: var(--ok); color: var(--ok); }
 #btnNo  { border-color: var(--urgent); color: var(--urgent); }
-#btnUp, #btnHome { min-width: 76px; font-size: 13px; flex-direction: column; gap: 2px; }
+#btnUp, #btnHome { min-width: 84px; font-size: 12px; flex-direction: column; gap: 0; }
+#btnUp svg, #btnHome svg { width: 42px; height: 42px; }
 #btnYes.pressed, #btnNo.pressed, #nav button.pressed { background: #fff59d; }
 
 /* ---------------- arkusze / panele ---------------- */

@@ -229,25 +229,112 @@
    *  Import zdjęć: kadr kwadratowy + skalowanie. Użytkownik nie musi
    *  niczego przycinać ręcznie.
    * ------------------------------------------------------------------ */
-  function normalizeImage(file, size) {
-    size = size || 640;
-    return new Promise(function (resolve) {
-      var url = URL.createObjectURL(file);
-      loadImage(url).then(function (img) {
-        URL.revokeObjectURL(url);
-        if (!img) { resolve(null); return; }
-        var canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, size, size);
-        drawCover(ctx, img, 0, 0, size, size, 0.35);
-        canvas.toBlob(function (blob) { resolve(blob); }, 'image/jpeg', 0.85);
-      });
+  /* Wczytanie z poszanowaniem obrotu EXIF. Zdjęcia z telefonu bywają zapisane
+   * „na boku", a informacja o obrocie siedzi w metadanych — bez tego twarz
+   * leży poziomo. createImageBitmap potrafi to rozwinąć od razu. */
+  function loadOriented(file) {
+    if (global.createImageBitmap) {
+      return createImageBitmap(file, { imageOrientation: 'from-image' })
+        .catch(function () { return loadViaTag(file); });
+    }
+    return loadViaTag(file);
+  }
+
+  function loadViaTag(file) {
+    var url = URL.createObjectURL(file);
+    return loadImage(url).then(function (img) {
+      URL.revokeObjectURL(url);
+      return img;
     });
   }
 
+  /** Sugerowane kadrowanie w pionie: im wyższe zdjęcie, tym wyżej twarz. */
+  function suggestFocusY(w, h) {
+    if (!w || !h || h <= w) { return 0.5; }
+    var y = 0.5 / (h / w);
+    return Math.max(0.2, Math.min(0.5, Math.round(y * 100) / 100));
+  }
+
+  /**
+   * Zmniejsza zdjęcie BEZ przycinania — kadr ustawia się później suwakiem
+   * i da się go poprawić w każdej chwili. Wcześniej kadr był wypalany
+   * na sztywno i źle dobranego nie dało się już naprawić.
+   * @returns {Promise<{blob, width, height, focusY}>}
+   */
+  function normalizeImage(file, maxSide) {
+    maxSide = maxSide || 900;
+    return loadOriented(file).then(function (img) {
+      if (!img) { return null; }
+
+      var w = img.width, h = img.height;
+      var scale = Math.min(1, maxSide / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale));
+      var ch = Math.max(1, Math.round(h * scale));
+
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(img, 0, 0, cw, ch);
+      if (img.close) { img.close(); }
+
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (blob) {
+          resolve(blob ? {
+            blob: blob, width: cw, height: ch, focusY: suggestFocusY(cw, ch)
+          } : null);
+        }, 'image/jpeg', 0.85);
+      });
+    }).catch(function () { return null; });
+  }
+
+  /**
+   * Obrót zdjęcia o wielokrotność 90°, wypalany na stałe.
+   * Potrzebny, bo część zdjęć (np. wyciągniętych z .docx) ma piksele obrócone
+   * i wyzute z EXIF — nie ma jak zgadnąć, że leżą na boku.
+   */
+  function rotateImage(blob, deg, maxSide) {
+    var d = ((deg % 360) + 360) % 360;
+    maxSide = maxSide || 900;
+    if (!d) { return normalizeImage(blob, maxSide); }
+
+    return loadOriented(blob).then(function (img) {
+      if (!img) { return null; }
+      var w = img.width, h = img.height;
+      var swap = (d % 180) !== 0;
+      var outW = swap ? h : w;
+      var outH = swap ? w : h;
+
+      // Obracamy i od razu zmniejszamy — inaczej obrócone zdjęcie zostawałoby
+      // w pełnej rozdzielczości i puchła pamięć telefonu.
+      var scale = Math.min(1, maxSide / Math.max(outW, outH));
+
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(outW * scale));
+      canvas.height = Math.max(1, Math.round(outH * scale));
+
+      var ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(d * Math.PI / 180);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, -w / 2, -h / 2);
+      if (img.close) { img.close(); }
+
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (out) {
+          resolve(out ? {
+            blob: out, width: canvas.width, height: canvas.height,
+            focusY: suggestFocusY(canvas.width, canvas.height)
+          } : null);
+        }, 'image/jpeg', 0.85);
+      });
+    }).catch(function () { return null; });
+  }
+
   global.Share = {
+    suggestFocusY: suggestFocusY,
+    rotateImage: rotateImage,
     canShareText: canShareText,
     canShareFiles: canShareFiles,
     isSecure: isSecure,

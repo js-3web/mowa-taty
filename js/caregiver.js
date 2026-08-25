@@ -93,6 +93,29 @@
       '</div>' +
 
       '<div class="cg-section">' +
+        '<h3>Zdalna aktualizacja</h3>' +
+        '<div style="font-size:13px;color:#5a6672;margin-bottom:8px">' +
+          'Paczka leży obok aplikacji na serwerze. Zmieniasz ją na komputerze, ' +
+          'telefon pobiera ją sam — przy uruchomieniu, po powrocie do aplikacji ' +
+          'i co pół godziny. Nikt nic tu nie musi wpisywać.</div>' +
+        '<div class="cg-row"><label for="cgRemoteUrl">Adres paczki</label>' +
+          '<input id="cgRemoteUrl" type="text" value="' + E(s.remoteUrl || '') +
+          '" placeholder="./paczka.json"></div>' +
+        '<div class="cg-row"><label for="cgRemotePass">Hasło (opcjonalne)</label>' +
+          '<input id="cgRemotePass" type="text" value="' + E(s.remotePass || '') +
+          '" placeholder="tylko dla paczki zaszyfrowanej"></div>' +
+        '<div class="cg-row"><label for="cgRemoteAuto">Sprawdzaj przy starcie</label>' +
+          '<input id="cgRemoteAuto" type="checkbox"' +
+            (s.remoteAuto !== false ? ' checked' : '') + '></div>' +
+        '<div class="cg-actions">' +
+          '<button type="button" class="primary" id="cgRemoteNow">Sprawdź teraz</button>' +
+          '<button type="button" id="cgForceUpdate">Odśwież aplikację</button>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#5a6672;margin-top:8px">Ostatnio wgrana paczka: ' +
+          E(s.remoteVersionApplied || 'żadna') + '</div>' +
+      '</div>' +
+
+      '<div class="cg-section">' +
         '<h3>Kopia zapasowa</h3>' +
         '<div style="font-size:13px;color:#5a6672;margin-bottom:8px">' +
           'Wszystko zostaje na tym urządzeniu. Kopia to zwykły plik JSON — ' +
@@ -162,6 +185,18 @@
       saveSetting('caregiverPin', this.value.trim());
     });
 
+    document.getElementById('cgRemoteUrl').addEventListener('change', function () {
+      saveSetting('remoteUrl', this.value.trim());
+    });
+    document.getElementById('cgRemotePass').addEventListener('change', function () {
+      saveSetting('remotePass', this.value.trim());
+    });
+    document.getElementById('cgRemoteAuto').addEventListener('change', function () {
+      saveSetting('remoteAuto', this.checked);
+    });
+    document.getElementById('cgRemoteNow').addEventListener('click', pullRemoteNow);
+    document.getElementById('cgForceUpdate').addEventListener('click', forceAppUpdate);
+
     document.getElementById('cgExport').addEventListener('click', exportBackup);
     document.getElementById('cgImport').addEventListener('click', importBackup);
     document.getElementById('cgReset').addEventListener('click', factoryReset);
@@ -205,6 +240,19 @@
 
   function addPerson() { editPerson(null); }
 
+  function blobOfImage(imageId) {
+    var rec = imageId ? App.state.images[imageId] : null;
+    if (!rec) { return null; }
+    if (rec.blob instanceof Blob) { return rec.blob; }
+    if (rec.dataUrl) { return DB.dataUrlToBlob(rec.dataUrl); }
+    return null;
+  }
+
+  function focusOf(imageId) {
+    var rec = imageId ? App.state.images[imageId] : null;
+    return (rec && rec.focusY !== undefined) ? rec.focusY : 0.35;
+  }
+
   function editPerson(personId) {
     ready();
     var p = personId
@@ -226,29 +274,65 @@
         '" placeholder="+48…"></div>' +
       '<div class="cg-row"><label>Zdjęcie</label>' +
         '<div><img id="pPreview" src="' + (url || '') + '" alt="" ' +
-        'style="width:96px;height:96px;object-fit:cover;border-radius:10px;' +
+        'style="width:120px;height:120px;object-fit:cover;border-radius:10px;' +
+        'object-position:' + App.imageFocus(p.imageId) + ';' +
         'border:2px solid #c9d1d8;' + (url ? '' : 'display:none') + '">' +
         '<input id="pFile" type="file" accept="image/*" style="margin-top:8px"></div></div>' +
+      '<div class="cg-row" id="pFocusRow"' + (url ? '' : ' style="display:none"') + '>' +
+        '<label for="pFocus">Kadr: góra ↔ dół</label>' +
+        '<input id="pFocus" type="range" min="0" max="100" step="2" value="' +
+        Math.round(focusOf(p.imageId) * 100) + '"></div>' +
       '<div style="font-size:13px;color:#5a6672;margin:8px 0">' +
-        'Zdjęcie zostanie automatycznie przycięte do kwadratu i pomniejszone — ' +
-        'nie musisz nic kadrować. Najlepiej wychodzi wyraźna twarz z bliska.</div>' +
+        'Zdjęcie jest tylko pomniejszane — kadr ustawiasz suwakiem i możesz go ' +
+        'poprawić kiedykolwiek. Najlepiej działa wyraźna twarz z bliska; ' +
+        'na zdjęciu grupowym nie da się pokazać jednej osoby.</div>' +
       '<div class="cg-actions">' +
         '<button type="button" class="primary" id="pSave">Zapisz</button>' +
+        '<button type="button" id="pRotate">↻ Obróć zdjęcie</button>' +
         '<button type="button" id="pCancel">Anuluj</button>' +
         (personId ? '<button type="button" class="danger" id="pDelete">Usuń</button>' : '') +
       '</div>';
 
-    var pendingBlob = null;
+    var pending = null;                        // { blob, width, height, focusY }
+    var focusY = focusOf(p.imageId);
+
+    var preview = document.getElementById('pPreview');
+    var slider = document.getElementById('pFocus');
+
+    slider.addEventListener('input', function () {
+      focusY = parseInt(this.value, 10) / 100;
+      preview.style.objectPosition = '50% ' + this.value + '%';
+    });
 
     document.getElementById('pFile').addEventListener('change', function (e) {
       var f = e.target.files && e.target.files[0];
       if (!f) { return; }
-      Share.normalizeImage(f, 640).then(function (blob) {
-        if (!blob) { App.toast('Nie udało się wczytać zdjęcia'); return; }
-        pendingBlob = blob;
-        var img = document.getElementById('pPreview');
-        img.src = URL.createObjectURL(blob);
-        img.style.display = '';
+      App.toast('Przetwarzam zdjęcie…');
+      Share.normalizeImage(f, 900).then(function (res) {
+        if (!res) { App.toast('Nie udało się wczytać zdjęcia'); return; }
+        pending = res;
+        focusY = res.focusY;
+        preview.src = URL.createObjectURL(res.blob);
+        preview.style.objectPosition = '50% ' + Math.round(focusY * 100) + '%';
+        preview.style.display = '';
+        slider.value = Math.round(focusY * 100);
+        document.getElementById('pFocusRow').style.display = '';
+      });
+    });
+
+    document.getElementById('pRotate').addEventListener('click', function () {
+      var source = pending ? pending.blob : blobOfImage(p.imageId);
+      if (!source) { App.toast('Najpierw wybierz zdjęcie'); return; }
+      App.toast('Obracam…');
+      Share.rotateImage(source, 90).then(function (res) {
+        if (!res) { App.toast('Nie udało się obrócić'); return; }
+        pending = res;
+        focusY = res.focusY;
+        preview.src = URL.createObjectURL(res.blob);
+        preview.style.objectPosition = '50% ' + Math.round(focusY * 100) + '%';
+        preview.style.display = '';
+        slider.value = Math.round(focusY * 100);
+        document.getElementById('pFocusRow').style.display = '';
       });
     });
 
@@ -275,10 +359,19 @@
       p.order = p.order || App.state.people.length;
 
       var chain = Promise.resolve();
-      if (pendingBlob) {
+      if (pending) {
         var imgId = 'img-' + p.id;
         p.imageId = imgId;
-        chain = DB.putImage(imgId, pendingBlob, name);
+        chain = DB.putImage(imgId, pending.blob, name, {
+          width: pending.width, height: pending.height, focusY: focusY
+        });
+      } else if (p.imageId) {
+        // samo przesunięcie kadru istniejącego zdjęcia
+        var rec = App.state.images[p.imageId];
+        if (rec && rec.focusY !== focusY) {
+          rec.focusY = focusY;
+          chain = DB.put('images', rec);
+        }
       }
       chain.then(function () { return DB.put('people', p); })
            .then(function () { return App.reload(); })
@@ -338,11 +431,12 @@
     document.getElementById('bFile').addEventListener('change', function (e) {
       var f = e.target.files && e.target.files[0];
       if (!f) { return; }
-      Share.normalizeImage(f, 640).then(function (blob) {
-        if (!blob) { return; }
-        pendingBlob = blob;
+      Share.normalizeImage(f, 900).then(function (res) {
+        if (!res) { return; }
+        pendingBlob = res;
         var img = document.getElementById('bPreview');
-        img.src = URL.createObjectURL(blob);
+        img.src = URL.createObjectURL(res.blob);
+        img.style.objectPosition = '50% ' + Math.round(res.focusY * 100) + '%';
         img.style.display = '';
       });
     });
@@ -380,7 +474,10 @@
       if (pendingBlob) {
         var imgId = 'img-' + btn.id;
         btn.imageId = imgId;
-        chain = DB.putImage(imgId, pendingBlob, btn.label);
+        chain = DB.putImage(imgId, pendingBlob.blob, btn.label, {
+          width: pendingBlob.width, height: pendingBlob.height,
+          focusY: pendingBlob.focusY
+        });
       }
       chain.then(function () { return DB.put('buttons', btn); })
            .then(function () {
@@ -395,6 +492,57 @@
     });
 
     App.openSheet('caregiverPanel');
+  }
+
+  /* ---------------- zdalna aktualizacja ---------------- */
+
+  function pullRemoteNow() {
+    var s = App.state.settings;
+    if (!s.remoteUrl) { App.toast('Najpierw podaj adres paczki'); return; }
+
+    App.toast('Sprawdzam…');
+    Remote.check(s).then(function (r) {
+      var opis = 'Paczka z ' + (r.version || 'nieznanej daty') + '.\n' +
+                 (r.pack.people ? r.pack.people.length + ' bliskich, ' : '') +
+                 (r.pack.images ? r.pack.images.length + ' zdjęć' : '');
+      if (!r.isNewer) { opis += '\n\nTa sama wersja, którą masz. Wgrać ponownie?'; }
+
+      return App.confirmBox(opis, 'Wgraj').then(function (ok) {
+        if (!ok) { return null; }
+        App.toast('Wgrywam…');
+        return Remote.apply(r.pack, s)
+          .then(normalizeStoredImages)
+          .then(function () { return App.reload(); })
+          .then(function () { App.toast('Gotowe'); openMain(); });
+      });
+    }).catch(function (e) {
+      App.toast(e && e.message ? e.message : 'Nie udało się pobrać paczki');
+    });
+  }
+
+  /* Service worker trzyma aplikację w pamięci podręcznej. Po wgraniu nowej
+   * wersji na serwer telefon potrafi uparcie pokazywać starą — ten przycisk
+   * czyści cache i przeładowuje. */
+  function forceAppUpdate() {
+    App.confirmBox('Pobrać najnowszą wersję aplikacji z serwera? ' +
+                   'Tablice i zdjęcia zostaną nietknięte.', 'Odśwież')
+      .then(function (ok) {
+        if (!ok) { return; }
+        var jobs = [];
+        if (global.caches) {
+          jobs.push(caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+        if (navigator.serviceWorker) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        Promise.all(jobs).then(function () {
+          location.replace(location.pathname + '?v=' + Date.now());
+        });
+      });
   }
 
   /* ---------------- kopia zapasowa ---------------- */
@@ -455,10 +603,24 @@
       var jobs = rows.map(function (rec) {
         var blob = rec.blob instanceof Blob ? rec.blob
                  : (rec.dataUrl ? DB.dataUrlToBlob(rec.dataUrl) : null);
-        if (!blob || blob.size <= LIMIT) { return null; }
-        return Share.normalizeImage(blob, 640).then(function (small) {
-          if (!small || small.size >= blob.size) { return null; }
-          return DB.putImage(rec.id, small, rec.caption || '');
+        // Zdjęcia z paczki nie mają wymiarów ani kadru — przepuszczamy je
+        // przez ten sam tor co ręcznie dodawane, żeby dostały jedno i drugie
+        // (przy okazji prostując obrót EXIF).
+        var needsMeta = rec.width === undefined || rec.focusY === undefined;
+        var needsRotate = !!rec.rotate;
+        if (!blob || (blob.size <= LIMIT && !needsMeta && !needsRotate)) { return null; }
+
+        var work = needsRotate ? Share.rotateImage(blob, rec.rotate)
+                               : Share.normalizeImage(blob, 900);
+
+        return work.then(function (res) {
+          if (!res) { return null; }
+          // Po obrocie kadr liczymy od nowa — stary odnosił się do innych boków.
+          var focus = needsRotate ? res.focusY
+                    : (rec.focusY !== undefined ? rec.focusY : res.focusY);
+          return DB.putImage(rec.id, res.blob, rec.caption || '', {
+            width: res.width, height: res.height, focusY: focus
+          });
         });
       }).filter(Boolean);
 

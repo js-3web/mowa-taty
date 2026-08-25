@@ -112,6 +112,62 @@ function parseCaption(caption) {
   return { role: role, full: full, name: full.split(/\s+/)[0] || full };
 }
 
+/* ---------- wymiary i obrót zdjęcia (bez bibliotek) ---------- */
+
+/** Wymiary JPEG z nagłówka SOF. */
+function jpegSize(buf) {
+  let i = 2;
+  while (i < buf.length - 9) {
+    if (buf[i] !== 0xFF) { i++; continue; }
+    const marker = buf[i + 1];
+    if (marker >= 0xC0 && marker <= 0xCF &&
+        marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+      return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+    }
+    if (i + 4 > buf.length) { break; }
+    i += 2 + buf.readUInt16BE(i + 2);
+  }
+  return null;
+}
+
+/** Orientacja EXIF (1–8). 5–8 oznaczają obrót o 90°, czyli zamianę boków. */
+function exifOrientation(buf) {
+  const app1 = buf.indexOf(Buffer.from('Exif\0\0'));
+  if (app1 < 0) { return 1; }
+  const tiff = app1 + 6;
+  if (tiff + 8 > buf.length) { return 1; }
+
+  const little = buf.toString('ascii', tiff, tiff + 2) === 'II';
+  const u16 = (o) => little ? buf.readUInt16LE(o) : buf.readUInt16BE(o);
+  const u32 = (o) => little ? buf.readUInt32LE(o) : buf.readUInt32BE(o);
+
+  const ifd = tiff + u32(tiff + 4);
+  if (ifd + 2 > buf.length) { return 1; }
+  const count = u16(ifd);
+
+  for (let n = 0; n < count; n++) {
+    const entry = ifd + 2 + n * 12;
+    if (entry + 12 > buf.length) { break; }
+    if (u16(entry) === 0x0112) { return u16(entry + 8) || 1; }
+  }
+  return 1;
+}
+
+/** Im wyższe zdjęcie, tym wyżej twarz — ta sama reguła co w aplikacji. */
+function suggestFocusY(w, h) {
+  if (!w || !h || h <= w) { return 0.5; }
+  return Math.max(0.2, Math.min(0.5, Math.round((0.5 / (h / w)) * 100) / 100));
+}
+
+function imageMeta(bytes) {
+  const size = jpegSize(bytes);
+  if (!size) { return {}; }
+  const rotated = exifOrientation(bytes) >= 5;
+  const w = rotated ? size.h : size.w;
+  const h = rotated ? size.w : size.h;
+  return { width: w, height: h, focusY: suggestFocusY(w, h) };
+}
+
 /* ---------- polski biernik dla „Chcę zobaczyć…" ---------- */
 
 function accusative(name) {
@@ -147,6 +203,17 @@ if (!fs.existsSync(docxPath)) {
 const files = readZip(fs.readFileSync(docxPath));
 const { images, captions } = parseDocx(files);
 
+// Ręczne poprawki kadru i obrotu — patrz „Zdjęcia rodziny/kadr.json".
+let overrides = {};
+const overridesPath = path.join(path.dirname(docxPath), 'kadr.json');
+if (fs.existsSync(overridesPath)) {
+  try {
+    overrides = JSON.parse(fs.readFileSync(overridesPath, 'utf8'));
+  } catch (e) {
+    console.warn('kadr.json jest niepoprawny, pomijam: ' + e.message);
+  }
+}
+
 if (images.length !== captions.length) {
   console.warn('Uwaga: ' + images.length + ' zdjęć i ' + captions.length +
                ' podpisów — sprawdź wynik ręcznie.');
@@ -176,11 +243,32 @@ images.forEach((imgPath, i) => {
 
   const imageId = 'img-' + slug;
   const mime = /\.png$/i.test(imgPath) ? 'image/png' : 'image/jpeg';
-  imagesOut.push({
+  const meta = imageMeta(bytes);
+  const fix = overrides[slug] || {};
+  if (fix.rotate) {
+    meta.rotate = fix.rotate;
+    // Po obrocie o 90° boki się zamieniają — kadr policz dla nowych proporcji.
+    if (fix.rotate % 180 !== 0 && meta.width) {
+      const w = meta.height, h = meta.width;
+      meta.width = w; meta.height = h;
+      meta.focusY = suggestFocusY(w, h);
+    }
+  }
+  if (fix.focusY !== undefined) { meta.focusY = fix.focusY; }
+
+  imagesOut.push(Object.assign({
     id: imageId,
     dataUrl: 'data:' + mime + ';base64,' + bytes.toString('base64'),
     caption: cap.full
-  });
+  }, meta));
+
+  if (meta.width) {
+    console.log('  ' + cap.full + ': ' + meta.width + 'x' + meta.height +
+                ', kadr ' + Math.round(meta.focusY * 100) + '%' +
+                (meta.rotate ? ', obrót ' + meta.rotate + '°' : '') +
+                (fix.focusY !== undefined ? ' (ręcznie)' : '') +
+                (meta.height / meta.width > 1.6 ? '  ← bardzo wysokie, lepszy byłby portret' : ''));
+  }
 
   if (cap.role.toLowerCase() === 'ja') {
     // Zdjęcie samego użytkownika — nie trafia do „Bliskich", tylko na tablicę
@@ -219,6 +307,7 @@ if (extraButtons.length) {
 
 const pack = {
   exportedAt: new Date().toISOString(),
+  packVersion: new Date().toISOString(),
   meta: [Object.assign({}, defaults.meta, { id: 'meta' })],
   settings: [Object.assign({}, defaults.settings, { id: 'settings' })],
   boards: boards,
@@ -228,6 +317,12 @@ const pack = {
   usageLog: []
 };
 
+// Paczka zdalna — ląduje od razu w app/, żeby poszła na GitHub razem z apką.
+// Telefon pobiera ją sam przy uruchomieniu; nikt nic nie wpisuje.
+const remoteFile = path.join(__dirname, '..', 'paczka.json');
+fs.writeFileSync(remoteFile, JSON.stringify(pack));
+
+// Ta sama treść w katalogu głównym — do ręcznego wczytania („Wczytaj kopię").
 const outFile = 'mowa-taty-rodzina.json';
 fs.writeFileSync(outFile, JSON.stringify(pack));
 
@@ -235,6 +330,38 @@ console.log('Zdjęcia: ' + images.length + ', bliscy: ' + people.length +
             (extraButtons.length ? ' + wizytówka użytkownika' : ''));
 people.forEach((p) => console.log('  ' + p.role + ': ' + p.fullName +
                                   '  → „Chcę zobaczyć ' + p.vocative + '"'));
-console.log('Zapisano ' + outFile + '  (' +
-            Math.round(fs.statSync(outFile).size / 1024) + ' kB)');
+console.log('Zapisano app/paczka.json  (' +
+            Math.round(fs.statSync(remoteFile).size / 1024) + ' kB)  ← WRZUĆ NA GITHUB');
+console.log('Zapisano ' + outFile + '  (kopia do ręcznego wczytania)');
 console.log('Pliki zdjęć: ' + outDirPhotos);
+console.log('Wersja paczki: ' + pack.packVersion);
+
+/* ---------- wersja zaszyfrowana, do wrzucenia na serwer ---------- */
+
+const passIdx = process.argv.indexOf('--haslo');
+if (passIdx !== -1) {
+  const pass = process.argv[passIdx + 1];
+  if (!pass || pass.length < 6) {
+    console.error('\nHasło musi mieć co najmniej 6 znaków: --haslo "twojehaslo"');
+    process.exit(1);
+  }
+
+  const crypto = require('crypto');
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(pass, salt, 200000, 32, 'sha256');
+
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([cipher.update(JSON.stringify(pack), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  const encFile = path.join(__dirname, '..', 'paczka.enc');
+  fs.writeFileSync(encFile, Buffer.concat([Buffer.from('MTP1'), salt, iv, ct, tag]));
+
+  console.log('\nZaszyfrowano: app/paczka.enc  (' +
+              Math.round(fs.statSync(encFile).size / 1024) + ' kB)');
+  console.log('Wrzuć TEN plik na GitHub razem z aplikacją.');
+  console.log('Wersja paczki: ' + pack.packVersion);
+} else {
+  console.log('\nPaczka jest jawna. Gdybyś kiedyś chciał ją zaszyfrować: --haslo "twojehaslo"');
+}

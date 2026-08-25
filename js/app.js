@@ -40,10 +40,62 @@
         render('home');
         el.boot.classList.add('done');
         el.app.hidden = false;
+        openPanelFromUrl();
+        checkRemote();
+        scheduleRemoteChecks();
       })
       .catch(function (err) {
         el.boot.textContent = 'Błąd uruchamiania: ' + (err && err.message ? err.message : err);
       });
+  }
+
+  /* Wejście do trybu opiekuna adresem: .../mowa-taty/#opiekun
+   * Gesty bywają przechwytywane przez system telefonu, a link działa zawsze
+   * i da się go wysłać sobie z komputera. PIN nadal obowiązuje. */
+  function openPanelFromUrl() {
+    var marker = (location.hash + location.search).toLowerCase();
+    if (marker.indexOf('opiekun') === -1) { return; }
+    if (history.replaceState) {
+      history.replaceState(null, '', location.pathname);   // nie zostawiaj w adresie
+    }
+    setTimeout(function () { Caregiver.requestAccess(); }, 300);
+  }
+
+  /* Zdalna aktualizacja: pobierz paczkę z serwera i zastosuj, jeśli jest
+   * nowsza niż ostatnio wgrana. Dzieje się samo — chory nic nie robi.
+   * Sprawdzamy przy starcie, po powrocie do aplikacji i co pół godziny,
+   * żeby zmiana z komputera dotarła bez restartu telefonu. */
+  var remoteBusy = false;
+
+  function scheduleRemoteChecks() {
+    if (S.settings.remoteAuto === false || !S.settings.remoteUrl) { return; }
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { checkRemote(); }
+    });
+    setInterval(checkRemote, 30 * 60 * 1000);
+  }
+
+  function checkRemote() {
+    var s = S.settings;
+    if (!s.remoteUrl || s.remoteAuto === false || remoteBusy) { return; }
+    remoteBusy = true;
+
+    Remote.check(s).then(function (r) {
+      if (!r.isNewer) { return null; }
+      toast('Pobieram nowe ustawienia…');
+      return Remote.apply(r.pack, s)
+        .then(function () { return Caregiver.normalizeImages(); })
+        .then(function () { return loadAll(); })
+        .then(function () {
+          applySettings();
+          TTS.configure(S.settings);
+          S.boardId = 'home'; S.stack = [];
+          render(null);
+          toast('Zaktualizowano zdalnie');
+        });
+    }).catch(function () {
+      /* brak sieci albo brak paczki — aplikacja działa dalej offline */
+    }).then(function () { remoteBusy = false; });
   }
 
   /** Pierwsze uruchomienie: wsyp domyślną zawartość. */
@@ -75,25 +127,27 @@
         (b.buttonIds || []).forEach(function (id) { needed[id] = true; });
       });
 
-      // Wejście do nowego działu na tablicy Start — tylko jeśli opiekun
-      // wcześniej tego przycisku nie usunął.
-      var home = S.boards.home;
-      var homeDefault = DefaultData.boards.filter(function (b) { return b.id === 'home'; })[0];
-      var homeAdds = [];
-      if (home && homeDefault) {
-        (homeDefault.buttonIds || []).forEach(function (id) {
-          if (!S.buttons[id] && (home.buttonIds || []).indexOf(id) === -1) {
-            homeAdds.push(id);
-            needed[id] = true;
-          }
+      /* Do istniejących tablic dokładamy wejścia do nowych działów.
+       * Warunek „przycisku jeszcze nie ma w bazie" chroni przed wskrzeszaniem
+       * tego, co opiekun świadomie skasował. */
+      var boardsToSave = [];
+      DefaultData.boards.forEach(function (def) {
+        var mine = S.boards[def.id];
+        if (!mine) { return; }
+        var adds = (def.buttonIds || []).filter(function (id) {
+          return !S.buttons[id] && (mine.buttonIds || []).indexOf(id) === -1;
         });
-      }
+        if (!adds.length) { return; }
+        adds.forEach(function (id) { needed[id] = true; });
+        mine.buttonIds = (mine.buttonIds || []).concat(adds);
+        boardsToSave.push(mine);
+      });
 
       var newButtons = DefaultData.buttons.filter(function (btn) {
         return needed[btn.id] && !S.buttons[btn.id];
       });
 
-      if (!newBoards.length && !newButtons.length && !homeAdds.length) {
+      if (!newBoards.length && !newButtons.length && !boardsToSave.length) {
         meta.contentVersion = target;
         return DB.put('meta', meta).then(function () { return false; });
       }
@@ -101,10 +155,7 @@
       var jobs = [];
       if (newBoards.length) { jobs.push(DB.putMany('boards', newBoards)); }
       if (newButtons.length) { jobs.push(DB.putMany('buttons', newButtons)); }
-      if (homeAdds.length) {
-        home.buttonIds = (home.buttonIds || []).concat(homeAdds);
-        jobs.push(DB.put('boards', home));
-      }
+      if (boardsToSave.length) { jobs.push(DB.putMany('boards', boardsToSave)); }
       meta.contentVersion = target;
       jobs.push(DB.put('meta', meta));
 
@@ -144,6 +195,14 @@
       if (!already) { return navigator.storage.persist(); }
       return true;
     }).catch(function () { /* brak wsparcia — kopia zapasowa i tak jest obowiązkowa */ });
+  }
+
+  /** Kadr zdjęcia jako wartość dla CSS object-position. */
+  function imageFocus(imageId) {
+    var rec = S.images[imageId];
+    var fx = (rec && rec.focusX !== undefined) ? rec.focusX : 0.5;
+    var fy = (rec && rec.focusY !== undefined) ? rec.focusY : 0.35;
+    return Math.round(fx * 100) + '% ' + Math.round(fy * 100) + '%';
   }
 
   function imageUrl(imageId) {
@@ -195,7 +254,8 @@
     var inner = '';
     var photo = btn.imageId ? imageUrl(btn.imageId) : null;
     if (photo) {
-      inner += '<img class="photo" src="' + photo + '" alt="">';
+      inner += '<img class="photo" src="' + photo + '" alt="" ' +
+               'style="object-position:' + imageFocus(btn.imageId) + '">';
     } else if (btn.icon && Icons.raw[btn.icon]) {
       inner += Icons.svg(btn.icon);
     }
@@ -238,7 +298,8 @@
       d.className = 'tile';
       d.style.setProperty('--tile-color', DefaultData.colors.ludzie);
       var photo = imageUrl(p.imageId);
-      d.innerHTML = (photo ? '<img class="photo" src="' + photo + '" alt="">'
+      d.innerHTML = (photo ? '<img class="photo" src="' + photo + '" alt="" ' +
+                             'style="object-position:' + imageFocus(p.imageId) + '">'
                            : Icons.svg('ludzie')) +
                     '<span class="label">' + escapeHtml(p.name) +
                     (p.role ? '<span class="role">' + escapeHtml(p.role.toLowerCase()) +
@@ -543,22 +604,27 @@
   /* ================= zdarzenia ================= */
 
   function bindUI() {
+    // Ikony pasków rysujemy wektorowo — emoji były za małe i nieczytelne.
+    el.btnSpeakAll.innerHTML = Icons.svg('głośnik') + '<span>Powiedz</span>';
+    el.btnBackspace.innerHTML = Icons.svg('kosz') + '<span>Kasuj</span>';
+    el.btnSend.innerHTML = Icons.svg('wyślij') + '<span>Wyślij</span>';
+    el.btnUp.innerHTML = Icons.svg('wstecz') + '<span>Wstecz</span>';
+    el.btnHome.innerHTML = Icons.svg('dom') + '<span>Start</span>';
+
     el.btnSpeakAll.addEventListener('click', function () {
       flash(el.btnSpeakAll);
       var t = sentenceText();
       if (t) { TTS.speak(t); }
     });
 
+    // „Kasuj" czyści CAŁE zdanie. Pojedynczy element usuwa się dotknięciem
+    // jego kafelka w pasku u góry — tak jest szybciej i mniej myląco.
     el.btnBackspace.addEventListener('click', function () {
       flash(el.btnBackspace);
-      S.sentence.pop();
-      renderSentence();
-    });
-    // Długie przytrzymanie „Kasuj" czyści całe zdanie.
-    holdToRun(el.btnBackspace, 900, function () {
+      if (!S.sentence.length) { return; }
       S.sentence = [];
       renderSentence();
-      toast('Wyczyszczono');
+      TTS.stop();
     });
 
     el.btnSend.addEventListener('click', function () { flash(el.btnSend); openSend(); });
@@ -658,6 +724,7 @@
     openSheet: openSheet,
     closeSheet: closeSheet,
     imageUrl: imageUrl,
+    imageFocus: imageFocus,
     escapeHtml: escapeHtml,
     dialog: dialog,
     confirmBox: confirmBox,

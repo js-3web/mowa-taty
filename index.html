@@ -22,16 +22,11 @@
   <!-- pasek budowania zdania -->
   <header id="sentenceBar">
     <div id="sentence" aria-live="polite"></div>
+    <!-- ikony wstawia app.js (Icons.svg), żeby były wektorowe i duże -->
     <div id="barActions">
-      <button id="btnSpeakAll" type="button" title="Powiedz całe zdanie">
-        <span aria-hidden="true">🔊</span><span>Powiedz</span>
-      </button>
-      <button id="btnBackspace" type="button" title="Usuń ostatnie">
-        <span aria-hidden="true">⌫</span><span>Kasuj</span>
-      </button>
-      <button id="btnSend" type="button" title="Wyślij komunikat">
-        <span aria-hidden="true">➤</span><span>Wyślij</span>
-      </button>
+      <button id="btnSpeakAll" type="button" title="Powiedz całe zdanie"></button>
+      <button id="btnBackspace" type="button" title="Wyczyść zdanie"></button>
+      <button id="btnSend" type="button" title="Wyślij komunikat"></button>
     </div>
   </header>
 
@@ -48,8 +43,8 @@
   <nav id="nav">
     <button id="btnYes" type="button">TAK</button>
     <button id="btnNo" type="button">NIE</button>
-    <button id="btnUp" type="button"><span aria-hidden="true">⬅</span><span>Wstecz</span></button>
-    <button id="btnHome" type="button"><span aria-hidden="true">⌂</span><span>Start</span></button>
+    <button id="btnUp" type="button"></button>
+    <button id="btnHome" type="button"></button>
   </nav>
 
 </div>
@@ -92,13 +87,39 @@
 <script src="js/data.js"></script>
 <script src="js/tts.js"></script>
 <script src="js/share.js"></script>
+<script src="js/remote.js"></script>
 <script src="js/app.js"></script>
 <script src="js/caregiver.js"></script>
 <script>
   // Service worker działa tylko na HTTPS (albo localhost). Z file:// po prostu go nie ma.
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () { /* offline bez SW */ });
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+
+        // Sprawdzaj, czy na serwerze jest nowsza wersja aplikacji — przy
+        // starcie, po powrocie do aplikacji i co pół godziny. Dzięki temu
+        // poprawki docierają na telefon bez żadnej akcji użytkownika.
+        function look() { reg.update().catch(function () {}); }
+        setInterval(look, 30 * 60 * 1000);
+        document.addEventListener('visibilitychange', function () {
+          if (!document.hidden) { look(); }
+        });
+      }).catch(function () { /* offline bez SW */ });
+
+      // Nowy service worker przejął stronę → przeładuj, ale tylko wtedy,
+      // gdy nie przerwiemy budowanego właśnie zdania ani wypowiedzi.
+      var reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (reloading) { return; }
+        reloading = true;
+
+        (function waitForCalm() {
+          var busy = (window.App && App.sentenceText && App.sentenceText()) ||
+                     (window.TTS && TTS.state && TTS.state.speaking);
+          if (busy) { setTimeout(waitForCalm, 5000); return; }
+          location.reload();
+        }());
+      });
     });
   }
 </script>

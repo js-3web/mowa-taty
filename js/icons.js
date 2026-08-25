@@ -148,7 +148,23 @@
     strach:   face('<ellipse cx="50" cy="66" rx="9" ry="11"/>',
                    '<path d="M30 30 L44 36"/><path d="M70 30 L56 36"/>'),
 
+    ubranie:  '<path d="M34 14 L20 24 L28 40 L36 34 L36 88 L64 88 L64 34 L72 40 L80 24 ' +
+              'L66 14 Q50 26 34 14 Z"/>',
+    okulary:  '<circle cx="28" cy="54" r="16"/><circle cx="72" cy="54" r="16"/>' +
+              '<path d="M44 52 Q50 46 56 52"/><path d="M12 46 L18 38"/><path d="M88 46 L82 38"/>',
+    oko:      '<path d="M8 50 Q50 16 92 50 Q50 84 8 50 Z"/><circle cx="50" cy="50" r="13"/>',
+    ucho:     '<path d="M34 88 Q34 66 30 56 Q22 44 26 32 Q32 14 52 14 Q72 14 74 34 ' +
+              'Q75 48 64 54 Q56 58 56 68 Q56 78 46 78"/>',
+    serce:    '<path d="M50 84 L22 58 Q8 44 20 30 Q34 16 50 34 Q66 16 80 30 Q92 44 78 58 Z"/>',
+
     /* --- funkcje aplikacji ---------------------------------------------- */
+    głośnik:  '<path d="M14 38 L30 38 L52 18 L52 82 L30 62 L14 62 Z"/>' +
+              '<path d="M64 36 Q74 50 64 64"/><path d="M76 26 Q92 50 76 74"/>',
+    kosz:     '<path d="M18 26 L82 26"/><path d="M40 26 L40 16 L60 16 L60 26"/>' +
+              '<path d="M26 26 L31 88 L69 88 L74 26"/>' +
+              '<path d="M42 40 L44 74"/><path d="M58 40 L56 74"/>',
+    wyślij:   '<path d="M12 50 L88 14 L62 88 L48 58 Z"/><path d="M48 58 L88 14"/>',
+    wstecz:   '<path d="M60 20 L28 50 L60 80"/>',
     skala:    '<path d="M10 62 L90 62"/><path d="M22 62 L22 46"/><path d="M38 62 L38 38"/>' +
               '<path d="M54 62 L54 30"/><path d="M70 62 L70 22"/><path d="M86 62 L86 14"/>',
     sms:      '<rect x="10" y="20" width="80" height="54" rx="8"/>' +

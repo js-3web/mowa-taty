@@ -84,7 +84,53 @@
     { id: 'rozmowa', title: 'Rozmowa', color: KOLOR.rozmowa, cols: 3,
       buttonIds: ['n-r-chce', 'n-r-niechce', 'n-r-czymoge', 'n-r-kiedy', 'n-r-czuje',
                   'n-r-pytania', 'n-r-czas', 'n-r-odpowiedzi', 'n-r-uprzejmosci',
-                  'n-r-rodzina'] },
+                  'n-r-rodzina', 'n-rozmowa2'] },
+
+    /* ---------- druga część drzewka ---------- */
+    { id: 'rozmowa2', title: 'Więcej rozmowy', color: KOLOR.rozmowa, cols: 3,
+      buttonIds: ['n-r2-lekarz', 'n-r2-cialo', 'n-r2-rehab', 'n-r2-posilki',
+                  'n-r2-ubranie', 'n-r2-dom', 'n-r2-zainteresowania',
+                  'n-r2-sprawy', 'n-r2-emocje'] },
+
+    { id: 'r2-lekarz', title: 'Rozmowa z lekarzem', color: KOLOR.personel, cols: 3,
+      buttonIds: ['l-chce', 'l-cojest', 'l-wyzdrowieje', 'l-mowic', 'l-ilepotrwa',
+                  'l-leki', 'l-operacja', 'l-boje', 'l-prosciej', 'l-niezrozumialem',
+                  'l-prawda', 'l-wypis'] },
+
+    { id: 'r2-cialo', title: 'Ciało i dolegliwości', color: KOLOR.bol, cols: 3,
+      buttonIds: ['c-kreci', 'c-dretwieje', 'c-nieczuje', 'c-skurcz', 'c-swedzi',
+                  'c-oczy', 'c-usta', 'c-sluch', 'c-wzrok', 'c-trzesie',
+                  'c-slabo', 'c-serce'] },
+
+    { id: 'r2-rehab', title: 'Rehabilitacja', color: KOLOR.rozmowa, cols: 3,
+      buttonIds: ['h-chce', 'h-niedam', 'h-boli', 'h-jeszczeraz', 'h-wolniej',
+                  'h-przerwa', 'h-pomaga', 'h-chodzic', 'h-reka', 'h-przytrzymaj'] },
+
+    { id: 'r2-posilki', title: 'Posiłki', color: KOLOR.potrzeby, cols: 3,
+      buttonIds: ['j-zupa', 'j-drugie', 'j-chleb', 'j-owoc', 'j-jogurt', 'j-slodkie',
+                  'j-twarde', 'j-przelykanie', 'j-krztusze', 'j-nakarmcie',
+                  'j-sam', 'j-sol'] },
+
+    { id: 'r2-ubranie', title: 'Ubranie i wygoda', color: KOLOR.potrzeby, cols: 3,
+      buttonIds: ['u-ubrac', 'u-rozebrac', 'u-nogi', 'u-poduszka', 'u-koc',
+                  'u-czyste', 'u-uwiera', 'u-skarpetki', 'u-kapcie', 'u-okulary'] },
+
+    { id: 'r2-dom', title: 'Dom i wspomnienia', color: KOLOR.ludzie, cols: 3,
+      buttonIds: ['d-tesknie', 'd-jaktam', 'd-coslychac', 'd-ktojest', 'd-porzadku',
+                  'd-zdjecia', 'd-opowiedz', 'd-pamietam', 'd-niepamietam',
+                  'd-inaczej', 'd-lozko', 'd-kwiaty'] },
+
+    { id: 'r2-zainteresowania', title: 'Telewizja i czas', color: KOLOR.dzien, cols: 3,
+      buttonIds: ['z-wiadomosci', 'z-sport', 'z-muzyka', 'z-kanal', 'z-glosniej',
+                  'z-ciszej', 'z-czytac', 'z-okno', 'z-nudzi', 'z-zostaw'] },
+
+    { id: 'r2-sprawy', title: 'Sprawy i rzeczy', color: KOLOR.personel, cols: 3,
+      buttonIds: ['s-rzeczy', 's-telefon', 's-okulary', 's-portfel', 's-zalatwcie',
+                  's-rachunki', 's-praca', 's-dokumenty', 's-podpis', 's-niezgadzam'] },
+
+    { id: 'r2-emocje', title: 'Emocje', color: KOLOR.czucie, cols: 3,
+      buttonIds: ['e-ciesze', 'e-spokojny', 'e-martwie', 'e-wstyd', 'e-bezradny',
+                  'e-dosc', 'e-niepoddam', 'e-cisza', 'e-przytul', 'e-zostaw'] },
 
     { id: 'r-chce', title: 'Chcę…', color: KOLOR.rozmowa, cols: 3,
       buttonIds: ['rc-woda', 'rc-herbata', 'rc-jesc', 'rc-spac', 'rc-wstac', 'rc-usiasc',
@@ -343,7 +389,137 @@
     b('rr-zadzwoncie',  'Zadzwońcie',           'Zadzwońcie do mnie.',            'telefonuj', { color: KOLOR.ludzie }),
     b('rr-kocham',      'Kocham Was',           'Kocham Was.',                    'dziękuję',  { color: KOLOR.ludzie }),
     b('rr-kiedy',       'Kiedy przyjedziecie?', 'Kiedy przyjedziecie?',           'kalendarz', { color: KOLOR.ludzie }),
-    b('rr-rzeczy',      'Przynieście rzeczy',   'Przynieście proszę moje rzeczy.','książka',   { color: KOLOR.ludzie })
+    b('rr-rzeczy',      'Przynieście rzeczy',   'Przynieście proszę moje rzeczy.','książka',   { color: KOLOR.ludzie }),
+
+    /* ================= druga część drzewka ================= */
+
+    nav('n-rozmowa2', 'Więcej…', 'rozmowa2', 'plus', KOLOR.rozmowa),
+
+    nav('n-r2-lekarz',          'U lekarza',    'r2-lekarz',          'personel',      KOLOR.personel),
+    nav('n-r2-cialo',           'Ciało',        'r2-cialo',           'ciało',         KOLOR.bol),
+    nav('n-r2-rehab',           'Rehabilitacja','r2-rehab',           'rehabilitacja', KOLOR.rozmowa),
+    nav('n-r2-posilki',         'Posiłki',      'r2-posilki',         'jedzenie',      KOLOR.potrzeby),
+    nav('n-r2-ubranie',         'Ubranie',      'r2-ubranie',         'ubranie',       KOLOR.potrzeby),
+    nav('n-r2-dom',             'Dom',          'r2-dom',             'dom',           KOLOR.ludzie),
+    nav('n-r2-zainteresowania', 'Telewizja',    'r2-zainteresowania', 'telewizor',     KOLOR.dzien),
+    nav('n-r2-sprawy',          'Sprawy',       'r2-sprawy',          'książka',       KOLOR.personel),
+    nav('n-r2-emocje',          'Emocje',       'r2-emocje',          'serce',         KOLOR.czucie),
+
+    /* --- u lekarza --- */
+    b('l-chce',            'Chcę lekarza',   'Chcę porozmawiać z lekarzem.',   'personel',  { color: KOLOR.personel }),
+    b('l-cojest',          'Co mi jest?',    'Co mi właściwie jest?',          'pytanie',   { color: KOLOR.personel }),
+    b('l-wyzdrowieje',     'Wyzdrowieję?',   'Czy wyzdrowieję?',               'pytanie',   { color: KOLOR.personel }),
+    b('l-mowic',           'Będę mówił?',    'Czy będę znowu mówił?',          'dymek',     { color: KOLOR.personel }),
+    b('l-ilepotrwa',       'Ile to potrwa?', 'Ile to wszystko potrwa?',        'czekać',    { color: KOLOR.personel }),
+    b('l-leki',            'Jakie leki?',    'Jakie leki teraz biorę?',        'leki',      { color: KOLOR.personel }),
+    b('l-operacja',        'Operacja?',      'Czy będzie operacja?',           'termometr', { color: KOLOR.personel }),
+    b('l-boje',            'Boję się',       'Boję się tego badania.',         'strach',    { color: KOLOR.personel }),
+    b('l-prosciej',        'Prościej',       'Wytłumaczcie mi to prościej.',   'powtórz',   { color: KOLOR.personel }),
+    b('l-niezrozumialem',  'Nie zrozumiałem','Nie zrozumiałem lekarza.',       'pytanie',   { color: KOLOR.personel }),
+    b('l-prawda',          'Chcę prawdy',    'Chcę wiedzieć, jak jest naprawdę.', 'dymek',  { color: KOLOR.personel }),
+    b('l-wypis',           'Kiedy wypis?',   'Kiedy zostanę wypisany?',        'dom',       { color: KOLOR.personel }),
+
+    /* --- ciało i dolegliwości --- */
+    b('c-dretwieje', 'Drętwieje ręka', 'Drętwieje mi ręka.',         'ręka',      { color: KOLOR.bol }),
+    b('c-kreci',     'Kręci się',      'Kręci mi się w głowie.',     'głowa',     { color: KOLOR.bol }),
+    b('c-nieczuje',  'Nie czuję nogi', 'Nie czuję nogi.',            'noga',      { color: KOLOR.bol }),
+    b('c-skurcz',    'Skurcz',         'Mam skurcz.',                'noga',      { color: KOLOR.bol }),
+    b('c-swedzi',    'Swędzi',         'Swędzi mnie.',               'ciało',     { color: KOLOR.bol }),
+    b('c-oczy',      'Pieką oczy',     'Pieką mnie oczy.',           'oko',       { color: KOLOR.bol }),
+    b('c-usta',      'Sucho w ustach', 'Zaschło mi w ustach.',       'woda',      { color: KOLOR.bol }),
+    b('c-sluch',     'Nie słyszę',     'Nie słyszę dobrze.',         'ucho',      { color: KOLOR.bol }),
+    b('c-wzrok',     'Widzę słabo',    'Widzę niewyraźnie.',         'oko',       { color: KOLOR.bol }),
+    b('c-trzesie',   'Trzęsą się ręce','Trzęsą mi się ręce.',        'ręka',      { color: KOLOR.bol }),
+    b('c-slabo',     'Słabo mi',       'Zrobiło mi się słabo.',      'zmęczony',  { color: KOLOR.bol }),
+    b('c-serce',     'Serce wali',     'Serce mi mocno bije.',       'serce',     { color: KOLOR.bol }),
+
+    /* --- rehabilitacja --- */
+    b('h-chce',         'Chcę ćwiczyć',  'Chcę ćwiczyć.',              'rehabilitacja', { color: KOLOR.rozmowa }),
+    b('h-niedam',       'Nie dam rady',  'Nie dam rady więcej.',       'zmęczony',      { color: KOLOR.rozmowa }),
+    b('h-boli',         'Boli przy tym', 'Boli mnie przy tym ćwiczeniu.', 'bol',        { color: KOLOR.bol }),
+    b('h-jeszczeraz',   'Jeszcze raz',   'Jeszcze raz.',               'powtórz',       { color: KOLOR.rozmowa }),
+    b('h-wolniej',      'Wolniej',       'Wolniej proszę.',            'czekać',        { color: KOLOR.rozmowa }),
+    b('h-przerwa',      'Przerwa',       'Potrzebuję przerwy.',        'czekać',        { color: KOLOR.rozmowa }),
+    b('h-pomaga',       'To pomaga',     'To mi dobrze robi.',         'dobrze',        { color: KOLOR.rozmowa }),
+    b('h-chodzic',      'Chcę chodzić',  'Chcę spróbować chodzić.',    'noga',          { color: KOLOR.rozmowa }),
+    b('h-reka',         'Podaj rękę',    'Podaj mi rękę.',             'ręka',          { color: KOLOR.rozmowa }),
+    b('h-przytrzymaj',  'Przytrzymaj',   'Przytrzymaj mnie.',          'pomoc',         { color: KOLOR.rozmowa }),
+
+    /* --- posiłki --- */
+    b('j-zupa',        'Zupa',          'Poproszę zupę.',                 'jedzenie', { color: KOLOR.potrzeby }),
+    b('j-drugie',      'Drugie danie',  'Poproszę drugie danie.',         'jedzenie', { color: KOLOR.potrzeby }),
+    b('j-chleb',       'Chleb',         'Poproszę chleb.',                'jedzenie', { color: KOLOR.potrzeby }),
+    b('j-owoc',        'Owoc',          'Poproszę owoc.',                 'jedzenie', { color: KOLOR.potrzeby }),
+    b('j-jogurt',      'Jogurt',        'Poproszę jogurt.',               'jedzenie', { color: KOLOR.potrzeby }),
+    b('j-slodkie',     'Coś słodkiego', 'Chcę coś słodkiego.',            'jedzenie', { color: KOLOR.potrzeby }),
+    b('j-twarde',      'Za twarde',     'To jest za twarde, nie pogryzę.','ząb',      { color: KOLOR.potrzeby }),
+    b('j-przelykanie', 'Ciężko przełknąć','Trudno mi przełykać.',         'gardło',   { color: KOLOR.bol }),
+    b('j-krztusze',    'Krztuszę się',  'Krztuszę się.',                  'gardło',   { color: KOLOR.bol }),
+    b('j-nakarmcie',   'Nakarmcie mnie','Nakarmcie mnie proszę.',         'pomoc',    { color: KOLOR.potrzeby }),
+    b('j-sam',         'Zjem sam',      'Chcę zjeść sam.',                'ręka',     { color: KOLOR.potrzeby }),
+    b('j-sol',         'Sól',           'Poproszę sól.',                  'jedzenie', { color: KOLOR.potrzeby }),
+
+    /* --- ubranie i wygoda --- */
+    b('u-ubrac',      'Chcę się ubrać',   'Chcę się ubrać.',            'ubranie',  { color: KOLOR.potrzeby }),
+    b('u-rozebrac',   'Chcę się rozebrać','Chcę się rozebrać.',         'ubranie',  { color: KOLOR.potrzeby }),
+    b('u-nogi',       'Zimne nogi',       'Zimno mi w nogi.',           'zimne',    { color: KOLOR.potrzeby }),
+    b('u-poduszka',   'Poduszka',         'Poprawcie mi poduszkę.',     'łóżko',    { color: KOLOR.potrzeby }),
+    b('u-koc',        'Koc',              'Poprawcie mi koc.',          'łóżko',    { color: KOLOR.potrzeby }),
+    b('u-czyste',     'Czyste ubranie',   'Chcę czyste ubranie.',       'ubranie',  { color: KOLOR.potrzeby }),
+    b('u-uwiera',     'Uwiera mnie',      'To ubranie mnie uwiera.',    'ubranie',  { color: KOLOR.potrzeby }),
+    b('u-skarpetki',  'Skarpetki',        'Poproszę skarpetki.',        'ubranie',  { color: KOLOR.potrzeby }),
+    b('u-kapcie',     'Kapcie',           'Poproszę kapcie.',           'ubranie',  { color: KOLOR.potrzeby }),
+    b('u-okulary',    'Okulary',          'Podajcie mi okulary.',       'okulary',  { color: KOLOR.potrzeby }),
+
+    /* --- dom i wspomnienia --- */
+    b('d-tesknie',     'Tęsknię za domem', 'Tęsknię za domem.',              'dom',      { color: KOLOR.ludzie }),
+    b('d-jaktam',      'Jak tam w domu?',  'Jak tam w domu?',                'dom',      { color: KOLOR.ludzie }),
+    b('d-coslychac',   'Co słychać?',      'Co u Was słychać?',              'dymek',    { color: KOLOR.ludzie }),
+    b('d-ktojest',     'Kto jest w domu?', 'Kto jest teraz w domu?',         'ludzie',   { color: KOLOR.ludzie }),
+    b('d-porzadku',    'Wszystko OK?',     'Czy w domu wszystko w porządku?','pytanie',  { color: KOLOR.ludzie }),
+    b('d-zdjecia',     'Zdjęcia',          'Chcę zobaczyć zdjęcia.',         'zdjęcie',  { color: KOLOR.ludzie }),
+    b('d-opowiedz',    'Opowiedz mi',      'Opowiedz mi coś.',               'dymek',    { color: KOLOR.ludzie }),
+    b('d-pamietam',    'Pamiętam to',      'Pamiętam to.',                   'dobrze',   { color: KOLOR.ludzie }),
+    b('d-niepamietam', 'Nie pamiętam',     'Nie pamiętam tego.',             'pytanie',  { color: KOLOR.ludzie }),
+    b('d-inaczej',     'Kiedyś inaczej',   'Kiedyś było inaczej.',           'kalendarz',{ color: KOLOR.ludzie }),
+    b('d-lozko',       'Moje łóżko',       'Chcę wrócić do swojego łóżka.',  'łóżko',    { color: KOLOR.ludzie }),
+    b('d-kwiaty',      'Podlejcie kwiaty', 'Podlejcie proszę kwiaty.',       'woda',     { color: KOLOR.ludzie }),
+
+    /* --- telewizja i czas --- */
+    b('z-wiadomosci', 'Wiadomości',    'Włącz wiadomości.',            'telewizor', { color: KOLOR.dzien }),
+    b('z-sport',      'Sport',         'Włącz sport.',                 'telewizor', { color: KOLOR.dzien }),
+    b('z-muzyka',     'Muzyka',        'Włącz muzykę.',                'muzyka',    { color: KOLOR.dzien }),
+    b('z-kanal',      'Zmień kanał',   'Zmień kanał.',                 'telewizor', { color: KOLOR.dzien }),
+    b('z-glosniej',   'Głośniej',      'Zrób głośniej.',               'głośnik',   { color: KOLOR.dzien }),
+    b('z-ciszej',     'Ciszej',        'Zrób ciszej.',                 'cisza',     { color: KOLOR.dzien }),
+    b('z-czytac',     'Chcę poczytać', 'Chcę poczytać.',               'książka',   { color: KOLOR.dzien }),
+    b('z-okno',       'Popatrzeć',     'Chcę popatrzeć przez okno.',   'okno',      { color: KOLOR.dzien }),
+    b('z-nudzi',      'Nudzi mi się',  'Nudzi mi się.',                'zmęczony',  { color: KOLOR.dzien }),
+    b('z-zostaw',     'Zostaw włączone','Zostaw proszę włączone.',     'telewizor', { color: KOLOR.dzien }),
+
+    /* --- sprawy i rzeczy --- */
+    b('s-rzeczy',     'Moje rzeczy',    'Gdzie są moje rzeczy?',          'książka',   { color: KOLOR.personel }),
+    b('s-telefon',    'Mój telefon',    'Gdzie jest mój telefon?',        'telefon',   { color: KOLOR.personel }),
+    b('s-okulary',    'Moje okulary',   'Gdzie są moje okulary?',         'okulary',   { color: KOLOR.personel }),
+    b('s-portfel',    'Mój portfel',    'Gdzie jest mój portfel?',        'książka',   { color: KOLOR.personel }),
+    b('s-zalatwcie',  'Załatwcie to',   'Załatwcie to proszę za mnie.',   'pomoc',     { color: KOLOR.personel }),
+    b('s-rachunki',   'Rachunki',       'Trzeba zapłacić rachunki.',      'książka',   { color: KOLOR.personel }),
+    b('s-praca',      'Zadzwońcie',     'Zadzwońcie w mojej sprawie.',    'telefonuj', { color: KOLOR.personel }),
+    b('s-dokumenty',  'Dokumenty',      'Potrzebuję moich dokumentów.',   'książka',   { color: KOLOR.personel }),
+    b('s-podpis',     'Podpis',         'Nie mogę teraz podpisać.',       'książka',   { color: KOLOR.personel }),
+    b('s-niezgadzam', 'Nie zgadzam się','Nie zgadzam się.',               'źle',       { color: KOLOR.personel }),
+
+    /* --- emocje --- */
+    b('e-ciesze',    'Cieszę się',     'Cieszę się.',                  'dobrze',   { color: KOLOR.czucie }),
+    b('e-spokojny',  'Jestem spokojny','Jestem spokojny.',             'serce',    { color: KOLOR.czucie }),
+    b('e-martwie',   'Martwię się',    'Martwię się.',                 'smutny',   { color: KOLOR.czucie }),
+    b('e-wstyd',     'Wstyd mi',       'Wstyd mi.',                    'smutny',   { color: KOLOR.czucie }),
+    b('e-bezradny',  'Bezradny',       'Czuję się bezradny.',          'smutny',   { color: KOLOR.czucie }),
+    b('e-dosc',      'Mam dość',       'Mam już dość.',                'zdenerwowany', { color: KOLOR.czucie }),
+    b('e-niepoddam', 'Nie poddam się', 'Nie poddam się.',              'dobrze',   { color: KOLOR.czucie }),
+    b('e-cisza',     'Potrzebuję ciszy','Potrzebuję ciszy.',           'cisza',    { color: KOLOR.czucie }),
+    b('e-przytul',   'Przytul mnie',   'Przytul mnie.',                'serce',    { color: KOLOR.czucie }),
+    b('e-zostaw',    'Zostaw mnie',    'Zostaw mnie proszę na chwilę.','cisza',    { color: KOLOR.czucie })
   ];
 
   var SETTINGS = {
@@ -356,7 +532,14 @@
     buttonMinPx: 88,
     speakOnTap: true,       // wypowiedz od razu po dotknięciu kafelka
     autoAppend: true,       // i dopisz do paska zdania
-    logUsage: true
+    logUsage: true,
+
+    // Zdalna konfiguracja: paczka leży obok aplikacji na GitHub Pages.
+    // Telefon pobiera ją sam — użytkownik nie robi nic.
+    remoteUrl: './paczka.json',
+    remotePass: '',         // puste = paczka jawna; wypełnione = zaszyfrowana
+    remoteAuto: true,
+    remoteVersionApplied: ''
   };
 
   var META = {
@@ -364,7 +547,7 @@
     schemaVersion: 1,
     // Podnieś, gdy dochodzą nowe tablice — istniejące instalacje dostaną je
     // przy najbliższym uruchomieniu, bez ruszania zmian opiekuna.
-    contentVersion: 2,
+    contentVersion: 3,
     appName: 'Mowa Taty',
     createdAt: new Date().toISOString()
   };

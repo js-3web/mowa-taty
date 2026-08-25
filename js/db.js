@@ -201,14 +201,26 @@
     return new Blob([arr], { type: mime });
   }
 
-  /** Zapis obrazka; w trybie localStorage od razu jako data URL. */
-  function putImage(id, blob, caption) {
-    if (mode === 'ls') {
-      return blobToDataUrl(blob).then(function (d) {
-        return put('images', { id: id, dataUrl: d, caption: caption || '' });
+  /**
+   * Zapis obrazka; w trybie localStorage od razu jako data URL.
+   * `meta` niesie wymiary i kadr (focusY) — dzięki temu kadrowanie da się
+   * poprawić później, bez ponownego wgrywania zdjęcia.
+   */
+  function putImage(id, blob, caption, meta) {
+    var rec = { id: id, caption: caption || '' };
+    if (meta) {
+      ['width', 'height', 'focusX', 'focusY'].forEach(function (k) {
+        if (meta[k] !== undefined) { rec[k] = meta[k]; }
       });
     }
-    return put('images', { id: id, blob: blob, caption: caption || '' });
+    if (mode === 'ls') {
+      return blobToDataUrl(blob).then(function (d) {
+        rec.dataUrl = d;
+        return put('images', rec);
+      });
+    }
+    rec.blob = blob;
+    return put('images', rec);
   }
 
   /** Zwraca URL nadający się do <img src>. Pamiętaj o revoke przy podmianie. */

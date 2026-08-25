@@ -1,0 +1,19 @@
+{
+  "name": "Mowa Taty",
+  "short_name": "Mowa Taty",
+  "description": "Tablica komunikacyjna dla osoby z afazją po udarze. Mówi, buduje zdania i wysyła je jako SMS.",
+  "lang": "pl",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eceff1",
+  "theme_color": "#37474f",
+  "categories": ["health", "medical", "utilities"],
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

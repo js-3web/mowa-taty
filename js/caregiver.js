@@ -113,6 +113,10 @@
         '</div>' +
         '<div style="font-size:12px;color:#5a6672;margin-top:8px">Ostatnio wgrana paczka: ' +
           E(s.remoteVersionApplied || 'żadna') + '</div>' +
+        (App.state.lastRemoteError
+          ? '<div class="status bad" style="margin-top:8px">Ostatnia próba pobrania ' +
+            'nie powiodła się: ' + E(App.state.lastRemoteError) + '</div>'
+          : '') +
       '</div>' +
 
       '<div class="cg-section">' +

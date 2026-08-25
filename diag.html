@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mowa Taty — diagnostyka</title>
+<style>
+  body { font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+         margin: 0; padding: 16px; line-height: 1.45; color: #111418; background: #fff; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  h2 { font-size: 1rem; margin: 22px 0 8px; padding-top: 10px; border-top: 1px solid #cfd8dc; }
+  p.sub { margin: 0 0 14px; color: #546e7a; font-size: .9rem; }
+  .row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0;
+         border-bottom: 1px solid #eceff1; font-size: .92rem; }
+  .row b { flex: 0 0 42%; font-weight: 600; }
+  .ok { color: #2e7d32; font-weight: 700; }
+  .bad { color: #c62828; font-weight: 700; }
+  .warn { color: #ef6c00; font-weight: 700; }
+  button, a.btn {
+    display: inline-block; font-size: 1rem; font-weight: 600;
+    padding: 14px 16px; margin: 6px 6px 0 0; min-height: 52px;
+    border: 2px solid #37474f; border-radius: 10px; background: #eceff1;
+    color: #111418; text-decoration: none; cursor: pointer;
+  }
+  button.primary, a.btn.primary { background: #1565c0; border-color: #0d47a1; color: #fff; }
+  button.danger { background: #ffebee; border-color: #c62828; color: #c62828; }
+  #verdict { padding: 14px; border-radius: 10px; font-weight: 600; margin: 12px 0;
+             border-left: 8px solid #90a4ae; background: #eceff1; font-size: .95rem; }
+  #verdict.ok { border-color: #2e7d32; background: #e8f5e9; }
+  #verdict.bad { border-color: #c62828; background: #ffebee; }
+  #verdict.warn { border-color: #ef6c00; background: #fff3e0; }
+  pre { background: #263238; color: #eceff1; padding: 12px; border-radius: 8px;
+        font-size: .78rem; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+
+<h1>Mowa Taty — diagnostyka</h1>
+<p class="sub">Otwórz tę stronę tam, gdzie coś nie działa. Powie, czego brakuje.</p>
+
+<div id="verdict">Sprawdzam…</div>
+
+<div>
+  <a class="btn primary" href="index.html#opiekun">Otwórz tryb opiekuna</a>
+  <button id="btnFix">Wyczyść pamięć i pobierz najnowszą wersję</button>
+  <button id="btnPull">Wgraj paczkę teraz</button>
+  <button class="danger" id="btnWipe">Skasuj dane aplikacji</button>
+</div>
+
+<h2>Pliki na serwerze</h2>
+<div id="files"></div>
+
+<h2>Paczka z rodziną</h2>
+<div id="pack"></div>
+
+<h2>Dane w tym urządzeniu</h2>
+<div id="local"></div>
+
+<h2>Środowisko</h2>
+<div id="env"></div>
+
+<h2>Log</h2>
+<pre id="log">—</pre>
+
+<script src="js/db.js"></script>
+<script src="js/share.js"></script>
+<script src="js/remote.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var WYMAGANE = [
+    'index.html', 'sw.js', 'manifest.json', 'css/app.css',
+    'js/icons.js', 'js/db.js', 'js/data.js', 'js/tts.js',
+    'js/share.js', 'js/remote.js', 'js/app.js', 'js/caregiver.js'
+  ];
+
+  var lines = [];
+  function log(m) {
+    lines.push(new Date().toLocaleTimeString('pl-PL') + '  ' + m);
+    document.getElementById('log').textContent = lines.join('\n');
+  }
+
+  function row(host, label, value, cls) {
+    var d = document.createElement('div');
+    d.className = 'row';
+    d.innerHTML = '<b>' + label + '</b><span class="' + (cls || '') + '">' + value + '</span>';
+    document.getElementById(host).appendChild(d);
+  }
+
+  var problemy = [];
+
+  /* ---------- 1. czy wszystkie pliki są wgrane ---------- */
+
+  function sprawdzPliki() {
+    return Promise.all(WYMAGANE.map(function (f) {
+      return fetch(f + '?d=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return { f: f, ok: r.ok, status: r.status }; })
+        .catch(function () { return { f: f, ok: false, status: 'brak połączenia' }; });
+    })).then(function (wyniki) {
+      wyniki.forEach(function (w) {
+        row('files', w.f, w.ok ? 'jest' : 'BRAK (' + w.status + ')', w.ok ? 'ok' : 'bad');
+        if (!w.ok) { problemy.push('Nie wgrano pliku ' + w.f); }
+      });
+    });
+  }
+
+  /* ---------- 2. paczka z rodziną ---------- */
+
+  function sprawdzPaczke() {
+    return fetch('paczka.json?d=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) { throw new Error('serwer odpowiedział ' + r.status); }
+        return r.text();
+      })
+      .then(function (txt) {
+        row('pack', 'plik paczka.json', 'jest, ' + Math.round(txt.length / 1024) + ' kB', 'ok');
+        var p = JSON.parse(txt);
+        row('pack', 'wersja paczki', p.packVersion || p.exportedAt || '—');
+        row('pack', 'bliskich w paczce', (p.people || []).length,
+            (p.people || []).length ? 'ok' : 'bad');
+        row('pack', 'zdjęć w paczce', (p.images || []).length,
+            (p.images || []).length ? 'ok' : 'bad');
+        row('pack', 'tablic w paczce', (p.boards || []).length);
+        if (!(p.people || []).length) { problemy.push('Paczka nie zawiera bliskich'); }
+        return p;
+      })
+      .catch(function (e) {
+        row('pack', 'plik paczka.json', 'BRAK — ' + e.message, 'bad');
+        problemy.push('Na serwerze nie ma pliku paczka.json — to dlatego nie widać bliskich');
+        return null;
+      });
+  }
+
+  /* ---------- 3. co jest zapisane lokalnie ---------- */
+
+  function sprawdzLokalne() {
+    return DB.open().then(function (tryb) {
+      row('local', 'magazyn', tryb === 'idb' ? 'IndexedDB' : 'localStorage (awaryjny)',
+          tryb === 'idb' ? 'ok' : 'warn');
+      return Promise.all([
+        DB.getAll('people'), DB.getAll('images'), DB.getAll('boards'),
+        DB.getAll('buttons'), DB.getAll('settings')
+      ]);
+    }).then(function (r) {
+      var s = r[4][0] || {};
+      row('local', 'bliscy zapisani tutaj', r[0].length, r[0].length ? 'ok' : 'bad');
+      row('local', 'zdjęcia zapisane tutaj', r[1].length, r[1].length ? 'ok' : 'bad');
+      row('local', 'tablice', r[2].length, r[2].length ? 'ok' : 'bad');
+      row('local', 'przyciski', r[3].length);
+      row('local', 'adres paczki w ustawieniach', s.remoteUrl || 'BRAK',
+          s.remoteUrl ? 'ok' : 'bad');
+      row('local', 'automatyczne pobieranie', s.remoteAuto === false ? 'WYŁĄCZONE' : 'włączone',
+          s.remoteAuto === false ? 'bad' : 'ok');
+      row('local', 'ostatnio wgrana paczka', s.remoteVersionApplied || 'żadna',
+          s.remoteVersionApplied ? 'ok' : 'warn');
+      row('local', 'PIN opiekuna', s.caregiverPin ? 'ustawiony' : 'brak (wejście bez PIN-u)');
+
+      if (!s.remoteUrl) {
+        problemy.push('Ustawienia w tym urządzeniu pochodzą ze starszej wersji ' +
+                      'i nie mają adresu paczki — użyj „Wyczyść pamięć…"');
+      }
+      if (!r[0].length) { problemy.push('W tym urządzeniu nie ma zapisanych bliskich'); }
+      return s;
+    }).catch(function (e) {
+      row('local', 'odczyt bazy', 'BŁĄD: ' + e.message, 'bad');
+      return {};
+    });
+  }
+
+  /* ---------- 4. środowisko ---------- */
+
+  function sprawdzSrodowisko() {
+    row('env', 'adres', location.href);
+    row('env', 'bezpieczne połączenie', isSecureContext ? 'tak' : 'NIE — część funkcji nie zadziała',
+        isSecureContext ? 'ok' : 'bad');
+    row('env', 'internet', navigator.onLine ? 'jest' : 'brak', navigator.onLine ? 'ok' : 'warn');
+
+    if (!('serviceWorker' in navigator)) { row('env', 'service worker', 'niewspierany', 'warn'); return; }
+
+    return navigator.serviceWorker.getRegistrations().then(function (rs) {
+      row('env', 'service worker', rs.length ? 'zarejestrowany' : 'brak', rs.length ? 'ok' : 'warn');
+      return caches.keys();
+    }).then(function (keys) {
+      row('env', 'pamięć podręczna', keys.join(', ') || 'pusta');
+      if (keys.length && keys.indexOf('mowa-taty-v5') === -1) {
+        row('env', 'wersja w pamięci', 'STARA — telefon trzyma poprzednie pliki', 'warn');
+        problemy.push('Telefon ma starą wersję w pamięci podręcznej — ' +
+                      'użyj „Wyczyść pamięć i pobierz najnowszą wersję"');
+      }
+    });
+  }
+
+  /* ---------- werdykt ---------- */
+
+  function werdykt() {
+    var el = document.getElementById('verdict');
+    if (!problemy.length) {
+      el.className = 'ok';
+      el.textContent = 'Wszystko na miejscu. Jeśli mimo to nie widać bliskich — ' +
+                       'naciśnij „Wgraj paczkę teraz".';
+      return;
+    }
+    el.className = 'bad';
+    el.innerHTML = '<div style="margin-bottom:6px">Znalezione problemy:</div><ul style="margin:0 0 0 18px;padding:0">' +
+      problemy.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>';
+  }
+
+  /* ---------- przyciski ---------- */
+
+  document.getElementById('btnFix').addEventListener('click', function () {
+    log('Czyszczę pamięć podręczną i service workera…');
+    var jobs = [];
+    if (window.caches) {
+      jobs.push(caches.keys().then(function (k) {
+        return Promise.all(k.map(function (n) { return caches.delete(n); }));
+      }));
+    }
+    if (navigator.serviceWorker) {
+      jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+        return Promise.all(rs.map(function (r) { return r.unregister(); }));
+      }));
+    }
+    Promise.all(jobs).then(function () {
+      log('Gotowe. Otwieram aplikację od nowa.');
+      location.replace('index.html?v=' + Date.now());
+    });
+  });
+
+  document.getElementById('btnPull').addEventListener('click', function () {
+    log('Pobieram paczkę…');
+    DB.getAll('settings').then(function (rows) {
+      var s = rows[0] || {};
+      if (!s.remoteUrl) { s.remoteUrl = './paczka.json'; }
+      return Remote.check(s).then(function (r) {
+        log('Paczka z ' + r.version + ': ' + (r.pack.people || []).length + ' bliskich.');
+        return Remote.apply(r.pack, s);
+      }).then(function () {
+        log('Wgrano. Otwieram aplikację.');
+        setTimeout(function () { location.replace('index.html?v=' + Date.now()); }, 800);
+      });
+    }).catch(function (e) {
+      log('BŁĄD: ' + (e && e.message ? e.message : e));
+    });
+  });
+
+  document.getElementById('btnWipe').addEventListener('click', function () {
+    if (!confirm('Skasować wszystkie dane aplikacji na tym urządzeniu? ' +
+                 'Tablice i zdjęcia zostaną pobrane na nowo z serwera.')) { return; }
+    Object.keys(localStorage).forEach(function (k) {
+      if (k.indexOf('mowa-taty:') === 0) { localStorage.removeItem(k); }
+    });
+    var req = indexedDB.deleteDatabase('mowa-taty');
+    req.onsuccess = req.onerror = req.onblocked = function () {
+      log('Dane skasowane. Otwieram aplikację od nowa.');
+      location.replace('index.html?v=' + Date.now());
+    };
+  });
+
+  /* ---------- start ---------- */
+
+  log('Start diagnostyki.');
+  sprawdzPliki()
+    .then(sprawdzPaczke)
+    .then(sprawdzLokalne)
+    .then(sprawdzSrodowisko)
+    .then(werdykt)
+    .then(function () { log('Zakończono.'); });
+}());
+</script>
+</body>
+</html>

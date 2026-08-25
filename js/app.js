@@ -93,8 +93,12 @@
           render(null);
           toast('Zaktualizowano zdalnie');
         });
-    }).catch(function () {
-      /* brak sieci albo brak paczki — aplikacja działa dalej offline */
+    }).catch(function (e) {
+      /* Aplikacja ma działać dalej offline, ale przyczynę trzeba zapamiętać —
+       * cicha porażka oznaczała, że „bliscy się nie pojawiają" i nie wiadomo
+       * dlaczego. Powód widać w trybie opiekuna i na stronie diagnostycznej. */
+      S.lastRemoteError = (e && e.message ? e.message : 'nieznany błąd') +
+                          ' (' + new Date().toLocaleTimeString('pl-PL') + ')';
     }).then(function () { remoteBusy = false; });
   }
 
@@ -108,6 +112,24 @@
         DB.put('settings', DefaultData.settings),
         DB.put('meta', DefaultData.meta)
       ]);
+    }).then(mergeMissingSettings);
+  }
+
+  /* Ustawienia zapisane przez starszą wersję aplikacji nie mają kluczy, które
+   * doszły później (np. adresu zdalnej paczki). Bez tego telefon po
+   * aktualizacji kodu nigdy nie sięgnąłby po paczkę i cicho stałby w miejscu.
+   * Uzupełniamy tylko brakujące klucze — istniejących nie ruszamy. */
+  function mergeMissingSettings() {
+    return DB.getAll('settings').then(function (rows) {
+      var s = rows[0];
+      if (!s) { return null; }
+      var added = [];
+      Object.keys(DefaultData.settings).forEach(function (k) {
+        if (s[k] === undefined) { s[k] = DefaultData.settings[k]; added.push(k); }
+      });
+      if (!added.length) { return null; }
+      s.id = 'settings';
+      return DB.put('settings', s);
     });
   }
 

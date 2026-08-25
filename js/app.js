@@ -5,7 +5,7 @@
   /* Wersja wbudowana w ten plik. Porównywana z version.json na serwerze —
    * to pas bezpieczeństwa na wypadek, gdyby service worker się zaciął.
    * Zmienia się skryptem: node app/scripts/bump-version.js */
-  var APP_VERSION = 'v6';
+  var APP_VERSION = 'v8';
 
   var S = {
     settings: null,
@@ -339,7 +339,28 @@
     d.innerHTML = inner;
 
     d.addEventListener('pointerdown', function () { flash(d); });
-    d.addEventListener('click', function () { activate(btn, d); });
+    d.addEventListener('click', function () {
+      // Po przytrzymaniu przeglądarka i tak wyśle „click" — pomijamy go,
+      // żeby fraza nie została jeszcze raz wypowiedziana i dopisana.
+      if (d._wyslano) { d._wyslano = false; return; }
+      activate(btn, d);
+    });
+
+    // Przytrzymanie kafelka = wyślij TĘ frazę, bez budowania zdania.
+    if (btn.type !== 'navigate') {
+      holdToRun(d, 900, function () {
+        d._wyslano = true;
+        d.classList.add('pressed');
+        setTimeout(function () { d.classList.remove('pressed'); }, 400);
+        openSend({
+          text: btn.speak || btn.label,
+          items: [{
+            id: btn.id, label: btn.label, speak: btn.speak,
+            icon: btn.icon, imageId: btn.imageId
+          }]
+        });
+      });
+    }
     return d;
   }
 
@@ -463,8 +484,15 @@
 
   /* ================= wysyłka ================= */
 
-  function openSend() {
-    var text = sentenceText();
+  /**
+   * Arkusz wysyłki.
+   * Bez argumentu bierze całe zbudowane zdanie; z argumentem — pojedynczy
+   * komunikat (przytrzymanie kafelka), żeby dało się wysłać jedną frazę
+   * bez budowania zdania.
+   */
+  function openSend(single) {
+    var text = single ? single.text : sentenceText();
+    var items = single ? single.items : S.sentence;
     if (!text) { return; }
     el.sendPreview.textContent = text;
     el.sendActions.innerHTML = '';
@@ -507,7 +535,7 @@
       Share.canShareFiles(),
       function () {
         toast('Przygotowuję obrazek…');
-        Share.renderMessageImage(S.sentence.map(function (i) {
+        Share.renderMessageImage(items.map(function (i) {
           return {
             imageUrl: i.imageId ? imageUrl(i.imageId) : null,
             iconSvg: (!i.imageId && i.icon && Icons.raw[i.icon])
@@ -551,20 +579,18 @@
 
   function openPerson(p) {
     var text = sentenceText();
-    el.personName.textContent = p.name;
-    el.personPreview.textContent = text || '(puste zdanie — najpierw zbuduj komunikat)';
+    el.personName.textContent = p.name + (p.role ? ' — ' + p.role.toLowerCase() : '');
+    el.personPreview.textContent = text || '(pusty pasek — SMS otworzy się bez treści)';
     el.personActions.innerHTML = '';
 
-    el.personActions.appendChild(actionButton(
-      'dziękuję', 'Powiedz: ' + p.name, 'wypowie imię na głos', true,
-      function () { TTS.speak('Chcę zobaczyć ' + (p.vocative || p.name) + '.'); }));
-
     if (p.phone) {
+      // Dzwonienie i SMS na wierzchu — po to jest ta karta.
       var call = document.createElement('a');
       call.className = 'btn';
       call.href = Share.telHref(p.phone);
       call.innerHTML = Icons.svg('telefonuj') +
         '<span>Zadzwoń<span class="sub">' + escapeHtml(p.phone) + '</span></span>';
+      call.addEventListener('click', function () { closeSheet('personSheet'); });
       el.personActions.appendChild(call);
 
       var sms = document.createElement('a');
@@ -572,9 +598,35 @@
       sms.href = Share.smsHref(text, p.phone);
       sms.innerHTML = Icons.svg('sms') +
         '<span>Wyślij SMS<span class="sub">' +
-        (text ? 'treść już wpisana' : 'pusta wiadomość') + '</span></span>';
+        (text ? 'treść już wpisana, wysyłkę zatwierdzasz w telefonie'
+              : 'pusta wiadomość — treść dopiszesz w telefonie') + '</span></span>';
+      sms.addEventListener('click', function () { closeSheet('personSheet'); });
       el.personActions.appendChild(sms);
+
+      if (Share.canShareText()) {
+        el.personActions.appendChild(actionButton(
+          'udostępnij', 'Wyślij przez Messengera',
+          'wybierzesz aplikację z listy', true,
+          function () {
+            Share.shareText(text || ('Wiadomość do: ' + p.name))
+              .then(function () { closeSheet('personSheet'); })
+              .catch(function () {});
+          }));
+      }
+    } else {
+      var brak = document.createElement('div');
+      brak.className = 'msg-preview';
+      brak.style.borderColor = '#ef6c00';
+      brak.innerHTML = '<b>Brak numeru telefonu.</b><br>' +
+        'Dopisz go w pliku <code>bliscy.json</code> na komputerze albo ' +
+        'w trybie opiekuna: Bliscy → Zmień.';
+      el.personActions.appendChild(brak);
     }
+
+    el.personActions.appendChild(actionButton(
+      'głośnik', 'Powiedz: chcę zobaczyć ' + (p.vocative || p.name),
+      'wypowie na głos', true,
+      function () { TTS.speak('Chcę zobaczyć ' + (p.vocative || p.name) + '.'); }));
 
     openSheet('personSheet');
   }

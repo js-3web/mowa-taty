@@ -526,6 +526,7 @@
     id: 'settings',
     ttsLang: 'pl-PL',
     ttsVoiceURI: null,
+    ttsPreferMale: true,    // domyślnie męski głos — mówi dorosły mężczyzna
     ttsRate: 0.9,
     ttsPitch: 1,
     caregiverPin: '2468',

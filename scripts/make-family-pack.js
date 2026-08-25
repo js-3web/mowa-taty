@@ -203,16 +203,28 @@ if (!fs.existsSync(docxPath)) {
 const files = readZip(fs.readFileSync(docxPath));
 const { images, captions } = parseDocx(files);
 
-// Ręczne poprawki kadru i obrotu — patrz „Zdjęcia rodziny/kadr.json".
-let overrides = {};
-const overridesPath = path.join(path.dirname(docxPath), 'kadr.json');
-if (fs.existsSync(overridesPath)) {
+function wczytajJson(nazwa) {
+  const p = path.join(path.dirname(docxPath), nazwa);
+  if (!fs.existsSync(p)) { return {}; }
   try {
-    overrides = JSON.parse(fs.readFileSync(overridesPath, 'utf8'));
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
   } catch (e) {
-    console.warn('kadr.json jest niepoprawny, pomijam: ' + e.message);
+    // Świadomie przerywamy zamiast ostrzec i lecieć dalej: po cichu pominięty
+    // plik konfiguracyjny oznacza paczkę bez numerów telefonów, a przyczynę
+    // odkrywa się dopiero na telefonie chorego.
+    console.error('\nBŁĄD: plik ' + nazwa + ' ma niepoprawny format JSON.');
+    console.error(e.message);
+    console.error('Najczęstsza przyczyna: cudzysłów " wewnątrz tekstu.');
+    console.error('Popraw plik i uruchom skrypt ponownie — paczka NIE została zbudowana.');
+    process.exit(1);
   }
 }
+
+// Ręczne poprawki kadru i obrotu — patrz „Zdjęcia rodziny/kadr.json".
+const overrides = wczytajJson('kadr.json');
+
+// Numery telefonów — patrz „Zdjęcia rodziny/bliscy.json".
+const kontakty = wczytajJson('bliscy.json');
 
 if (images.length !== captions.length) {
   console.warn('Uwaga: ' + images.length + ' zdjęć i ' + captions.length +
@@ -226,6 +238,7 @@ if (!fs.existsSync(outDirPhotos)) { fs.mkdirSync(outDirPhotos, { recursive: true
 const people = [];
 const imagesOut = [];
 const extraButtons = [];
+const bezNumeru = [];
 
 images.forEach((imgPath, i) => {
   const bytes = files[imgPath];
@@ -285,16 +298,21 @@ images.forEach((imgPath, i) => {
     return;
   }
 
+  const kontakt = kontakty[slug] || {};
+  const telefon = (kontakt.telefon || '').trim();
+
   people.push({
     id: 'p-' + slug,
     name: cap.name,
     fullName: cap.full,
     role: cap.role,
-    vocative: accusative(cap.name),
-    phone: '',
+    vocative: (kontakt.wolacz || '').trim() || accusative(cap.name),
+    phone: telefon,
     imageId: imageId,
     order: people.length
   });
+
+  if (!telefon) { bezNumeru.push(cap.name); }
 });
 
 // wizytówka na tablicę „Do personelu"
@@ -305,9 +323,15 @@ if (extraButtons.length) {
   if (personel) { personel.buttonIds = ['ja-wizytowka'].concat(personel.buttonIds); }
 }
 
+/* Domyślnie paczka NIE rusza ustawień urządzenia (głos, tempo mowy, wielkość
+ * przycisków, PIN) — te dostraja się przy chorym i szkoda je kasować przy
+ * każdej zmianie treści. Flaga --ustawienia wymusza nadpisanie także ich. */
+const nadpiszUstawienia = process.argv.indexOf('--ustawienia') !== -1;
+
 const pack = {
   exportedAt: new Date().toISOString(),
   packVersion: new Date().toISOString(),
+  settingsOverride: nadpiszUstawienia,
   meta: [Object.assign({}, defaults.meta, { id: 'meta' })],
   settings: [Object.assign({}, defaults.settings, { id: 'settings' })],
   boards: boards,
@@ -329,12 +353,21 @@ fs.writeFileSync(outFile, JSON.stringify(pack));
 console.log('Zdjęcia: ' + images.length + ', bliscy: ' + people.length +
             (extraButtons.length ? ' + wizytówka użytkownika' : ''));
 people.forEach((p) => console.log('  ' + p.role + ': ' + p.fullName +
-                                  '  → „Chcę zobaczyć ' + p.vocative + '"'));
+                                  '  → „Chcę zobaczyć ' + p.vocative + '"' +
+                                  (p.phone ? '  ☎ ' + p.phone : '  (bez numeru)')));
+if (bezNumeru.length) {
+  console.log('\nBez numeru telefonu (nie będzie „Zadzwoń" ani „SMS"): ' +
+              bezNumeru.join(', '));
+  console.log('Numery dopisz w „Zdjęcia rodziny/bliscy.json".');
+}
 console.log('Zapisano app/paczka.json  (' +
             Math.round(fs.statSync(remoteFile).size / 1024) + ' kB)  ← WRZUĆ NA GITHUB');
 console.log('Zapisano ' + outFile + '  (kopia do ręcznego wczytania)');
 console.log('Pliki zdjęć: ' + outDirPhotos);
 console.log('Wersja paczki: ' + pack.packVersion);
+console.log(nadpiszUstawienia
+  ? 'Ustawienia urządzenia ZOSTANĄ nadpisane (głos, tempo, wielkość przycisków, PIN).'
+  : 'Ustawienia urządzenia zostaną nietknięte. Aby wysłać także je: --ustawienia');
 
 /* ---------- wersja zaszyfrowana, do wrzucenia na serwer ---------- */
 

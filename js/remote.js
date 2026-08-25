@@ -125,13 +125,28 @@
    * łączności — inaczej telefon po pierwszej aktualizacji przestałby być
    * osiągalny zdalnie.
    */
+  /* Ustawienia, które należą do KONKRETNEGO urządzenia, a nie do treści.
+   * Paczka ich nie nadpisuje, bo:
+   *  - identyfikator głosu jest inny na każdym telefonie (nadpisanie = niemota),
+   *  - tempo mowy i wielkość przycisków dostraja się pod chorego na miejscu,
+   *  - adres paczki musi przetrwać, inaczej telefon wypada spod kontroli.
+   * Gdy naprawdę chcę zmienić je zdalnie, paczka niesie settingsOverride: true. */
+  var DEVICE_KEYS = [
+    'remoteUrl', 'remotePass', 'remoteAuto',
+    'ttsVoiceURI', 'ttsPreferMale', 'ttsRate', 'ttsPitch',
+    'buttonMinPx', 'caregiverPin', 'speakOnTap', 'autoAppend'
+  ];
+
   function apply(pack, currentSettings) {
-    var keep = {
-      remoteUrl: currentSettings.remoteUrl,
-      remotePass: currentSettings.remotePass,
-      remoteAuto: currentSettings.remoteAuto,
-      remoteVersionApplied: pack.packVersion || pack.exportedAt || ''
-    };
+    var keep = { remoteVersionApplied: pack.packVersion || pack.exportedAt || '' };
+
+    var lockDevice = !pack.settingsOverride;
+    DEVICE_KEYS.forEach(function (k) {
+      var mine = currentSettings[k];
+      if (mine === undefined) { return; }
+      // adres paczki chronimy zawsze — bez niego nie ma jak dosłać poprawki
+      if (lockDevice || k.indexOf('remote') === 0) { keep[k] = mine; }
+    });
 
     return DB.importAll(pack).then(function () {
       return DB.getAll('settings');

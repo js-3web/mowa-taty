@@ -31,7 +31,10 @@
     speaking: false
   };
 
-  var settings = { ttsLang: 'pl-PL', ttsRate: 0.9, ttsPitch: 1, ttsVoiceURI: null };
+  var settings = {
+    ttsLang: 'pl-PL', ttsRate: 0.9, ttsPitch: 1,
+    ttsVoiceURI: null, ttsPreferMale: true
+  };
   var listeners = [];
 
   function emit() { listeners.forEach(function (fn) { try { fn(state); } catch (e) {} }); }
@@ -46,20 +49,47 @@
     emit();
   }
 
+  /* Web Speech API nie podaje płci głosu — trzeba ją wnioskować z nazwy.
+   * Stąd lista rozpoznawanych imion i oznaczeń. Dla dorosłego mężczyzny
+   * po udarze męski głos brzmi jak własny, a nie jak lektor z automatu. */
+  var MESKIE = ['adam', 'marek', 'jacek', 'jan', 'piotr', 'krzysztof', 'tomasz',
+                'male', 'męski', 'meski', 'man', '-m-', 'oda', 'jmk'];
+  var ZENSKIE = ['paulina', 'ewa', 'agnieszka', 'zosia', 'maja', 'anna', 'kasia',
+                 'female', 'żeński', 'zenski', 'woman', '-f-'];
+
+  function genderScore(voice) {
+    var n = (voice.name + ' ' + voice.voiceURI).toLowerCase();
+    var meski = MESKIE.some(function (t) { return n.indexOf(t) !== -1; });
+    var zenski = ZENSKIE.some(function (t) { return n.indexOf(t) !== -1; });
+    if (meski && !zenski) { return 1; }
+    if (zenski && !meski) { return -1; }
+    return 0;
+  }
+
   function pickVoice() {
     if (settings.ttsVoiceURI) {
       var byUri = state.voices.filter(function (v) { return v.voiceURI === settings.ttsVoiceURI; });
       if (byUri.length) { return byUri[0]; }
     }
-    // Preferuj głos lokalny (offline) — w szpitalu może nie być Wi-Fi.
-    var local = state.plVoices.filter(function (v) { return v.localService; });
-    if (local.length) { return local[0]; }
-    return state.plVoices[0] || null;
+
+    // Głos lokalny (offline) ma pierwszeństwo — w szpitalu może nie być Wi-Fi.
+    var pula = state.plVoices.filter(function (v) { return v.localService; });
+    if (!pula.length) { pula = state.plVoices; }
+    if (!pula.length) { return null; }
+
+    if (settings.ttsPreferMale === false) { return pula[0]; }
+
+    var meskie = pula.filter(function (v) { return genderScore(v) > 0; });
+    if (meskie.length) { return meskie[0]; }
+
+    // Nic pewnego — weź przynajmniej taki, który nie wygląda na żeński.
+    var neutralne = pula.filter(function (v) { return genderScore(v) >= 0; });
+    return neutralne[0] || pula[0];
   }
 
   function configure(s) {
     if (!s) { return; }
-    ['ttsLang', 'ttsRate', 'ttsPitch', 'ttsVoiceURI'].forEach(function (k) {
+    ['ttsLang', 'ttsRate', 'ttsPitch', 'ttsVoiceURI', 'ttsPreferMale'].forEach(function (k) {
       if (s[k] !== undefined && s[k] !== null) { settings[k] = s[k]; }
     });
     state.chosen = pickVoice();

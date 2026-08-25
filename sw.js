@@ -10,7 +10,7 @@
  * cache-first, bo się nie zmieniają. Pliki są małe (~150 kB), więc nic to
  * nie kosztuje, a wersja zawsze się zgadza.
  */
-var CACHE_VERSION = 'mowa-taty-v6';
+var CACHE_VERSION = 'mowa-taty-v8';
 
 var SHELL = [
   './',

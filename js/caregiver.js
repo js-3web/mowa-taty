@@ -59,6 +59,9 @@
                      E(v.name) + (v.local ? ' — offline' : ' — sieciowy') + '</option>';
             }).join('') +
           '</select></div>' +
+        '<div class="cg-row"><label for="cgMale">Męski głos</label>' +
+          '<input id="cgMale" type="checkbox"' +
+            (s.ttsPreferMale !== false ? ' checked' : '') + '></div>' +
         '<div class="cg-row"><label for="cgRate">Tempo mowy</label>' +
           '<input id="cgRate" type="range" min="0.5" max="1.3" step="0.05" value="' +
             (s.ttsRate || 0.9) + '"></div>' +
@@ -156,6 +159,13 @@
     document.getElementById('cgVoice').addEventListener('change', function () {
       saveSetting('ttsVoiceURI', this.value || null);
       TTS.configure(App.state.settings);
+    });
+    document.getElementById('cgMale').addEventListener('change', function () {
+      saveSetting('ttsPreferMale', this.checked);
+      saveSetting('ttsVoiceURI', null);      // wróć do wyboru automatycznego
+      TTS.configure(App.state.settings);
+      TTS.speak('Dzień dobry. Tak teraz brzmię.');
+      setTimeout(openMain, 2500);
     });
     document.getElementById('cgRate').addEventListener('change', function () {
       saveSetting('ttsRate', parseFloat(this.value));
